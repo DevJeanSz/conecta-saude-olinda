@@ -15,6 +15,8 @@ import { Server } from 'socket.io';
 import * as ftp from 'basic-ftp';
 import unzipper from 'unzipper';
 import csv from 'csv-parser';
+import rateLimit from 'express-rate-limit';
+import xss from 'xss';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { hasAppointmentConflict, nextQueuePassword } from '../server/domain/schedulingRules.mjs';
@@ -106,7 +108,23 @@ app.use(helmet({
 }));
 app.use(express.json({ limit: '256kb' }));
 
-const sanitizeText = value => String(value ?? '').trim().replace(/\s+/g, ' ');
+// Global rate limiting
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 200, // limit each IP to 200 requests per windowMs
+  message: 'Muitas requisições deste IP, tente novamente mais tarde.'
+});
+app.use('/api/', apiLimiter);
+
+// Specific stricter limit for auth routes
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20, // limit each IP to 20 auth requests
+  message: 'Muitas tentativas de login. Tente novamente mais tarde.'
+});
+app.use('/api/auth/', authLimiter);
+
+const sanitizeText = value => String(xss(value ?? '')).trim().replace(/\s+/g, ' ');
 const SYSTEM_ROLES = ['ADMIN', 'GENERAL_SUPERVISOR', 'DOCTOR', 'ATTENDANT', 'SOCIAL_WORKER', 'PATIENT'];
 const MANAGEMENT_ROLES = ['ADMIN', 'GENERAL_SUPERVISOR'];
 const normalizeRole = role => SYSTEM_ROLES.includes(role) ? role : null;
