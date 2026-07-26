@@ -1405,6 +1405,17 @@ app.post('/api/appointments', authenticate, async (req, res, next) => {
       }
     }
 
+    if (doctor.rows[0].specialty_id) {
+      const specialty = await pool.query('SELECT * FROM specialties WHERE id = $1', [doctor.rows[0].specialty_id]);
+      if (specialty.rows[0]) {
+        const spec = specialty.rows[0];
+        const specUnitIds = spec.unit_ids ? (typeof spec.unit_ids === 'string' ? JSON.parse(spec.unit_ids) : spec.unit_ids) : [];
+        if (!spec.is_global && !specUnitIds.includes(unitId)) {
+          return res.status(403).json({ error: 'A especialidade do profissional nao esta disponivel nesta unidade.' });
+        }
+      }
+    }
+
     const { rows } = await pool.query(
       `INSERT INTO appointments (patient_id, doctor_id, unit_id, date, time, notes)
        VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,

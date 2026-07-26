@@ -100,11 +100,22 @@ export const PatientPortal: React.FC = () => {
       
       // Fetch doctors for this unit
       const docsInUnit = await api.users.getDoctorsByUnit(uId);
-      setDoctors(docsInUnit);
       
-      // Get unique specialties available
+      // Get unique specialties available from these doctors
       const specIds = [...new Set(docsInUnit.map(d => d.specialtyId))].filter(Boolean);
-      const specsForUnit = specialties.filter(s => specIds.includes(s.id as string));
+      
+      // Filter specialties by valid association with the selected unit
+      const specsForUnit = specialties.filter(s => 
+          specIds.includes(s.id as string) && 
+          (s.isGlobal || (s.unitIds && s.unitIds.includes(uId)))
+      );
+      
+      const validSpecIds = specsForUnit.map(s => s.id);
+      
+      // Keep only doctors whose specialty is valid for this unit
+      const validDoctors = docsInUnit.filter(d => d.specialtyId && validSpecIds.includes(d.specialtyId));
+      
+      setDoctors(validDoctors);
       setAvailableSpecialties(specsForUnit);
   };
 
@@ -181,6 +192,12 @@ export const PatientPortal: React.FC = () => {
   
   const confirmAppointment = async () => {
       if (!currentUser || !selectedDoc || !selectedDate || !selectedTime || !selectedUnitId) return;
+
+      const docSpecialty = specialties.find(s => s.id === selectedDoc.specialtyId);
+      if (docSpecialty && !docSpecialty.isGlobal && (!docSpecialty.unitIds || !docSpecialty.unitIds.includes(selectedUnitId))) {
+          setFeedback({ type: 'error', message: 'Especialidade não autorizada para esta unidade.' });
+          return;
+      }
 
       if (selectedDoc.maxDailyPatients) {
         const allAppts = await api.appointments.getByUnit(selectedUnitId);

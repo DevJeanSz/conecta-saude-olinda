@@ -102,6 +102,11 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
     const allAppts = await api.appointments.getByUnit(user.unitId);
 
     if (selectedSpecialty) {
+      if (!selectedSpecialty.isGlobal && (!selectedSpecialty.unitIds || !selectedSpecialty.unitIds.includes(user.unitId))) {
+        alert("A especialidade deste profissional não está habilitada para esta unidade.");
+        return;
+      }
+
       // Check Days of Week
       if (selectedSpecialty.schedule && selectedSpecialty.schedule.length > 0) {
           const [year, month, day] = selectedDate.split('-').map(Number);
@@ -225,6 +230,14 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
     [AppointmentStatus.CANCELLED]: "bg-red-100 text-red-700",
     [AppointmentStatus.NO_SHOW]: "bg-gray-100 text-gray-700",
   };
+
+  const validSpecialtyIds = specialties
+    .filter((s) => s.isGlobal || (s.unitIds && s.unitIds.includes(user.unitId)))
+    .map((s) => s.id);
+
+  const validDoctors = doctors.filter(
+    (d) => d.specialtyId && validSpecialtyIds.includes(d.specialtyId)
+  );
 
   return (
     <div className="space-y-6">
@@ -410,7 +423,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
                   }
                 >
                   <option value="">Selecione...</option>
-                  {doctors.map((d) => (
+                  {validDoctors.map((d) => (
                     <option key={d.id} value={d.id}>
                       {d.name} - {getSpecialtyName(d.specialtyId)}
                     </option>
