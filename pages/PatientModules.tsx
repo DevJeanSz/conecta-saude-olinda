@@ -49,6 +49,22 @@ const formatDate = (value: string) => {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString('pt-BR');
 };
 
+const EXAM_TIME_OPTIONS = ['07:00', '07:30', '08:00', '08:30', '09:00', '09:30', '10:00', '10:30'];
+
+const getAvailableExamDates = () => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return Array.from({ length: 21 }, (_, index) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() + index);
+    return date;
+  })
+    .filter(date => date.getDay() !== 0 && date.getDay() !== 6)
+    .slice(0, 10)
+    .map(date => date.toISOString().slice(0, 10));
+};
+
 const maskIdentifier = (value?: string) => {
   if (!value) return 'Não informado';
   const clean = value.replace(/\D/g, '');
@@ -167,6 +183,7 @@ export const PatientAppointmentsPage: React.FC<PatientPageProps> = ({ user }) =>
   const [tab, setTab] = useState<'future' | 'history'>('future');
   const [loading, setLoading] = useState(true);
   const [feedback, setFeedback] = useState('');
+  const [expandedAppointmentId, setExpandedAppointmentId] = useState<string | null>(null);
 
   const refresh = async () => {
     setLoading(true);
@@ -266,7 +283,11 @@ export const PatientAppointmentsPage: React.FC<PatientPageProps> = ({ user }) =>
                       </div>
                     </div>
                     <div className="mt-4 flex flex-wrap gap-2">
-                      <button className="h-10 rounded-xl border border-[#CFE7FF] px-4 text-sm font-black text-[#0B60C9] hover:bg-[#F7FBFF]" type="button">
+                      <button
+                        className="h-10 rounded-xl border border-[#CFE7FF] px-4 text-sm font-black text-[#0B60C9] hover:bg-[#F7FBFF]"
+                        type="button"
+                        onClick={() => setExpandedAppointmentId(expandedAppointmentId === appointment.id ? null : appointment.id)}
+                      >
                         Ver detalhes
                       </button>
                       {appointment.status === AppointmentStatus.SCHEDULED && (
@@ -280,6 +301,32 @@ export const PatientAppointmentsPage: React.FC<PatientPageProps> = ({ user }) =>
                         </button>
                       )}
                     </div>
+                    {expandedAppointmentId === appointment.id && (
+                      <div className="mt-4 grid gap-3 rounded-2xl border border-[#D9E6F5] bg-[#F7FBFF] p-4 text-sm font-semibold text-[#5F708A] sm:grid-cols-2">
+                        <div>
+                          <span className="block text-xs font-black uppercase text-[#8A99AD]">Unidade</span>
+                          <strong className="text-[#10223F]">{unit?.name || 'Unidade de referÃªncia'}</strong>
+                        </div>
+                        <div>
+                          <span className="block text-xs font-black uppercase text-[#8A99AD]">Profissional</span>
+                          <strong className="text-[#10223F]">{doctor?.name || 'Profissional de saÃºde'}</strong>
+                        </div>
+                        <div>
+                          <span className="block text-xs font-black uppercase text-[#8A99AD]">Data e horÃ¡rio</span>
+                          <strong className="text-[#10223F]">{formatDate(appointment.date)} Ã s {appointment.time}</strong>
+                        </div>
+                        <div>
+                          <span className="block text-xs font-black uppercase text-[#8A99AD]">Senha/Check-in</span>
+                          <strong className="text-[#10223F]">{appointment.queuePassword || 'DisponÃ­vel na recepÃ§Ã£o'}</strong>
+                        </div>
+                        {appointment.notes && (
+                          <div className="sm:col-span-2">
+                            <span className="block text-xs font-black uppercase text-[#8A99AD]">ObservaÃ§Ãµes</span>
+                            <p className="text-[#10223F]">{appointment.notes}</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </article>
                 );
               })}
@@ -424,17 +471,23 @@ export const PatientExamSchedulePage: React.FC<PatientPageProps> = ({ user }) =>
     date: '',
     time: '08:00',
   });
+  const availableExamDates = useMemo(() => getAvailableExamDates(), []);
 
   useEffect(() => {
     const run = async () => {
       const [patientData, unitData] = await Promise.all([loadPatient(user), api.units.getAll()]);
       setPatient(patientData);
       setUnits(unitData);
-      setForm(prev => ({ ...prev, unitId: patientData?.unitId || unitData[0]?.id || '' }));
+      setForm(prev => ({
+        ...prev,
+        unitId: patientData?.unitId || unitData[0]?.id || '',
+        date: prev.date || availableExamDates[0] || '',
+        time: prev.time || EXAM_TIME_OPTIONS[0],
+      }));
       setLoading(false);
     };
     run();
-  }, [user.id]);
+  }, [availableExamDates, user.id]);
 
   const preparation = form.type.includes('Sangue') || form.type.includes('Hemograma')
     ? 'Jejum de 8 horas e documento com foto.'
@@ -495,11 +548,15 @@ export const PatientExamSchedulePage: React.FC<PatientPageProps> = ({ user }) =>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="mb-2 block text-sm font-black text-[#06296F]">Data</label>
-                <input className={inputClass} min={new Date().toISOString().split('T')[0]} type="date" value={form.date} onChange={event => setForm({ ...form, date: event.target.value })} required />
+                <select className={inputClass} value={form.date} onChange={event => setForm({ ...form, date: event.target.value })} required>
+                  {availableExamDates.map(date => <option key={date} value={date}>{formatDate(date)}</option>)}
+                </select>
               </div>
               <div>
               <label className="mb-2 block text-sm font-black text-[#06296F]">Horário</label>
-                <input className={inputClass} type="time" value={form.time} onChange={event => setForm({ ...form, time: event.target.value })} required />
+                <select className={inputClass} value={form.time} onChange={event => setForm({ ...form, time: event.target.value })} required>
+                  {EXAM_TIME_OPTIONS.map(time => <option key={time} value={time}>{time}</option>)}
+                </select>
               </div>
             </div>
           </div>

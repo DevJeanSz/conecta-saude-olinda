@@ -123,7 +123,7 @@ const App: React.FC = () => {
           path="/patient-portal/schedule"
           element={(
             <PatientRouteWrapper>
-              <PatientPortal />
+              <PatientPortal user={user as User} />
             </PatientRouteWrapper>
           )}
         />
