@@ -31,8 +31,8 @@ export const PrototypeNavigator: React.FC = () => {
               <X size={17} />
             </button>
           </div>
-          <p>Navegue pelo protótipo completo.</p>
-          <nav aria-label="Telas do protótipo">
+          <p>Acesse rapidamente as principais telas.</p>
+          <nav aria-label="Mapa de telas">
             {screens.map((screen) => (
               <button
                 className={location.pathname === screen.path ? 'active' : ''}

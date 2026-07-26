@@ -21,7 +21,7 @@ import {
 import { BrandLockup } from './BrandLockup';
 import { useTheme } from '../contexts/ThemeContext';
 import { api, apiOrigin } from '../services/api';
-import { Notification, User, UserRole } from '../types';
+import { AppointmentStatus, Notification, User, UserRole } from '../types';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -58,6 +58,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifMenu, setShowNotifMenu] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [todayAppointmentCount, setTodayAppointmentCount] = useState(0);
   const [unitName, setUnitName] = useState('Carregando...');
   const { theme, setTheme } = useTheme();
 
@@ -80,8 +81,26 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
       }
     };
 
+    const checkTodayAppointments = async () => {
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        const appts = user.unitId
+          ? await api.appointments.getByUnit(user.unitId)
+          : await api.appointments.getAll();
+        const activeToday = appts.filter((appointment) => {
+          const isActive = appointment.status !== AppointmentStatus.CANCELLED;
+          const belongsToDoctor = user.role !== UserRole.DOCTOR || appointment.doctorId === user.id;
+          return appointment.date === today && isActive && belongsToDoctor;
+        });
+        setTodayAppointmentCount(activeToday.length);
+      } catch {
+        setTodayAppointmentCount(0);
+      }
+    };
+
     loadUnit();
     checkNotifs();
+    checkTodayAppointments();
 
     const socket = io(apiOrigin);
     socket.emit('join', user.id);
@@ -132,7 +151,9 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
             >
               <item.icon size={19} />
               <span>{item.label}</span>
-              {index === 5 && <small>{unreadCount || ''}</small>}
+              {item.path === '/admin/schedule' && todayAppointmentCount > 0 && (
+                <small>{todayAppointmentCount}</small>
+              )}
             </button>
           ))}
         </nav>

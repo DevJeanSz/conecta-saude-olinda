@@ -50,7 +50,7 @@ const formatDate = (value: string) => {
 };
 
 const maskIdentifier = (value?: string) => {
-  if (!value) return 'Nao informado';
+  if (!value) return 'Não informado';
   const clean = value.replace(/\D/g, '');
   if (clean.length <= 4) return value;
   return `${clean.slice(0, 3)}****${clean.slice(-4)}`;
@@ -82,7 +82,7 @@ const PatientPageShell = ({
 const DemoNotice = () => (
   <div className="flex gap-3 rounded-2xl border border-[#CFE7FF] bg-[#DFF0FF] p-4 text-sm font-semibold text-[#06296F]">
     <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0" />
-    <p>Dados ficticios de demonstracao. Esta tela nao exibe prontuario clinico nem dados reais de pacientes.</p>
+    <p>Informações protegidas. Esta tela exibe somente dados autorizados para o seu perfil.</p>
   </div>
 );
 
@@ -146,7 +146,7 @@ const AppointmentBadge = ({ status }: { status: AppointmentStatus }) => {
 const ExamBadge = ({ status }: { status: ExamStatus }) => {
   const labels = {
     [ExamStatus.SCHEDULED]: 'Agendado',
-    [ExamStatus.AVAILABLE]: 'Resultado disponivel',
+    [ExamStatus.AVAILABLE]: 'Resultado disponível',
     [ExamStatus.CANCELLED]: 'Cancelado',
   };
   const styles = {
@@ -197,16 +197,16 @@ export const PatientAppointmentsPage: React.FC<PatientPageProps> = ({ user }) =>
     .sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`));
 
   const cancelAppointment = async (appointment: Appointment) => {
-    if (!window.confirm('Cancelar esta consulta de demonstracao?')) return;
+    if (!window.confirm('Cancelar esta consulta?')) return;
     await api.appointments.update(appointment.id, { status: AppointmentStatus.CANCELLED });
-    setFeedback('Consulta cancelada. O historico foi preservado.');
+    setFeedback('Consulta cancelada. O histórico foi preservado.');
     await refresh();
   };
 
   return (
     <PatientPageShell
       title="Minhas consultas"
-      description="Acompanhe consultas futuras, historico e detalhes dos seus agendamentos."
+      description="Acompanhe consultas futuras, histórico e detalhes dos seus agendamentos."
       action={(
         <Link className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#0B60C9] px-5 font-black text-white hover:bg-[#0847AA]" to="/patient-portal/schedule">
           <Calendar className="h-5 w-5" />
@@ -219,13 +219,13 @@ export const PatientAppointmentsPage: React.FC<PatientPageProps> = ({ user }) =>
       {loading ? (
         <LoadingState />
       ) : !patient ? (
-        <EmptyState title="Cadastro nao localizado" description="Entre novamente pelo portal para carregar seu cadastro ficticio." />
+        <EmptyState title="Cadastro não localizado" description="Entre novamente pelo portal para carregar seu cadastro." />
       ) : (
         <>
           <div className={`${cardClass} flex gap-2 p-2`}>
             {[
-              ['future', 'Proximas'],
-              ['history', 'Historico'],
+              ['future', 'Próximas'],
+              ['history', 'Histórico'],
             ].map(([key, label]) => (
               <button
                 key={key}
@@ -241,8 +241,8 @@ export const PatientAppointmentsPage: React.FC<PatientPageProps> = ({ user }) =>
           {visibleAppointments.length === 0 ? (
             <EmptyState
               icon={Calendar}
-              title={tab === 'future' ? 'Nenhuma consulta futura' : 'Sem historico de consultas'}
-              description="Quando houver movimentacao, os registros aparecerao aqui com status e detalhes."
+              title={tab === 'future' ? 'Nenhuma consulta futura' : 'Sem histórico de consultas'}
+              description="Quando houver movimentação, os registros aparecerão aqui com status e detalhes."
               action={<Link className="font-black text-[#0B60C9]" to="/patient-portal/schedule">Agendar agora</Link>}
             />
           ) : (
@@ -256,9 +256,9 @@ export const PatientAppointmentsPage: React.FC<PatientPageProps> = ({ user }) =>
                       <div>
                         <AppointmentBadge status={appointment.status} />
                         <h2 className="mt-3 text-xl font-black text-[#10223F]">
-                          {doctor?.name || 'Profissional de saude'}
+                          {doctor?.name || 'Profissional de saúde'}
                         </h2>
-                        <p className="mt-1 text-sm font-semibold text-[#5F708A]">{unit?.name || 'Unidade de referencia'}</p>
+                        <p className="mt-1 text-sm font-semibold text-[#5F708A]">{unit?.name || 'Unidade de referência'}</p>
                       </div>
                       <div className="grid grid-cols-2 gap-3 text-sm font-bold text-[#10223F] sm:text-right">
                         <span className="inline-flex items-center gap-2 sm:justify-end"><Calendar className="h-4 w-4 text-[#0B60C9]" />{formatDate(appointment.date)}</span>
@@ -311,16 +311,16 @@ export const PatientCareHistoryPage: React.FC<PatientPageProps> = ({ user }) => 
   );
 
   return (
-    <PatientPageShell title="Atendimentos" description="Linha do tempo resumida de atendimentos ficticios, sem prontuario sensivel.">
+    <PatientPageShell title="Atendimentos" description="Linha do tempo resumida de atendimentos registrados, sem prontuário sensível.">
       <DemoNotice />
       <div className={`${cardClass} flex items-center gap-3 p-3`}>
         <Search className="h-5 w-5 text-[#8A99AD]" />
-        <input className="h-10 flex-1 bg-transparent text-sm font-semibold outline-none" value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar por servico, profissional ou resumo" />
+        <input className="h-10 flex-1 bg-transparent text-sm font-semibold outline-none" value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar por serviço, profissional ou resumo" />
       </div>
       {loading ? (
         <LoadingState />
       ) : filteredItems.length === 0 ? (
-        <EmptyState icon={Stethoscope} title="Nenhum atendimento encontrado" description="A demonstracao ainda nao possui eventos para os filtros selecionados." />
+        <EmptyState icon={Stethoscope} title="Nenhum atendimento encontrado" description="A lista ainda não possui eventos para os filtros selecionados." />
       ) : (
         <div className="relative space-y-4 pl-5 before:absolute before:left-1.5 before:top-2 before:h-full before:w-0.5 before:bg-[#D9E6F5]">
           {filteredItems.map(item => (
@@ -330,7 +330,7 @@ export const PatientCareHistoryPage: React.FC<PatientPageProps> = ({ user }) => 
                 <span className="text-sm font-black text-[#0B60C9]">{formatDate(item.date)}</span>
               </div>
               <p className="mt-2 text-sm font-semibold text-[#5F708A]">{item.summary}</p>
-              <p className="mt-3 text-xs font-black uppercase text-[#8A99AD]">Responsavel: {item.professionalName}</p>
+              <p className="mt-3 text-xs font-black uppercase text-[#8A99AD]">Responsável: {item.professionalName}</p>
             </article>
           ))}
         </div>
@@ -362,16 +362,16 @@ export const PatientUnitsPage: React.FC = () => {
   });
 
   return (
-    <PatientPageShell title="Unidades de saude" description="Localize unidades, horarios e contatos de demonstracao da rede municipal.">
+    <PatientPageShell title="Unidades de saúde" description="Localize unidades, horários e contatos da rede municipal.">
       <DemoNotice />
       <div className={`${cardClass} grid gap-3 p-4 sm:grid-cols-[1fr_180px]`}>
         <div className="flex items-center gap-3 rounded-xl border border-[#CBD8E8] px-3">
           <Search className="h-5 w-5 text-[#8A99AD]" />
-          <input className="h-11 flex-1 bg-transparent text-sm font-semibold outline-none" value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar por nome, bairro ou endereco" />
+          <input className="h-11 flex-1 bg-transparent text-sm font-semibold outline-none" value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar por nome, bairro ou endereço" />
         </div>
         <select className={inputClass} value={selectedType} onChange={event => setSelectedType(event.target.value)}>
           <option value="all">Todos os tipos</option>
-          <option value="usf">Unidades basicas</option>
+          <option value="usf">Unidades básicas</option>
           <option value="hospital">Hospitais</option>
         </select>
       </div>
@@ -393,7 +393,7 @@ export const PatientUnitsPage: React.FC = () => {
                   </p>
                 </div>
                 <span className="w-fit rounded-full bg-[#EAF6FF] px-3 py-1 text-xs font-black text-[#0B60C9]">
-                  {unit.isHospital ? 'Hospital' : 'Unidade basica'}
+                  {unit.isHospital ? 'Hospital' : 'Unidade básica'}
                 </span>
               </div>
               <div className="mt-4 grid gap-3 text-sm font-bold text-[#10223F] sm:grid-cols-3">
@@ -401,7 +401,7 @@ export const PatientUnitsPage: React.FC = () => {
                 <span className="flex items-center gap-2"><Clock className="h-4 w-4 text-[#0B60C9]" />Segunda a sexta</span>
                 <span className="flex items-center gap-2"><Info className="h-4 w-4 text-[#FFCF22]" />Atendimento: {unit.attendanceType === 'SENHA' ? 'senha' : 'chegada'}</span>
               </div>
-              <p className="mt-4 text-xs font-semibold text-[#8A99AD]">Endereco e telefone ficticios para demonstracao quando nao sincronizados pelo CNES.</p>
+              <p className="mt-4 text-xs font-semibold text-[#8A99AD]">Endereço e telefone podem ser atualizados pela unidade quando necessário.</p>
             </article>
           ))}
         </div>
@@ -419,7 +419,7 @@ export const PatientExamSchedulePage: React.FC<PatientPageProps> = ({ user }) =>
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [form, setForm] = useState({
     type: 'Hemograma completo',
-    requestCode: 'REQ-DEMO-2026',
+    requestCode: 'REQ-OLINDA-2026',
     unitId: '',
     date: '',
     time: '08:00',
@@ -438,12 +438,12 @@ export const PatientExamSchedulePage: React.FC<PatientPageProps> = ({ user }) =>
 
   const preparation = form.type.includes('Sangue') || form.type.includes('Hemograma')
     ? 'Jejum de 8 horas e documento com foto.'
-    : 'Levar documento com foto e solicitacao do exame.';
+    : 'Levar documento com foto e solicitação do exame.';
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!patient) {
-      setFeedback({ type: 'error', message: 'Cadastro de paciente nao localizado.' });
+      setFeedback({ type: 'error', message: 'Cadastro de paciente não localizado.' });
       return;
     }
     setSubmitting(true);
@@ -457,16 +457,16 @@ export const PatientExamSchedulePage: React.FC<PatientPageProps> = ({ user }) =>
         time: form.time,
         preparation,
       });
-      setFeedback({ type: 'success', message: 'Exame agendado com sucesso. O resumo ja esta disponivel em Meus exames.' });
+      setFeedback({ type: 'success', message: 'Exame agendado com sucesso. O resumo já está disponível em Meus exames.' });
     } catch (error) {
-      setFeedback({ type: 'error', message: 'Nao foi possivel agendar o exame. Verifique os dados e tente novamente.' });
+      setFeedback({ type: 'error', message: 'Não foi possível agendar o exame. Verifique os dados e tente novamente.' });
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <PatientPageShell title="Agendar exame" description="Simule a solicitacao, escolha unidade, data e horario para um exame.">
+    <PatientPageShell title="Agendar exame" description="Solicite, escolha unidade, data e horário para um exame.">
       {loading ? (
         <LoadingState />
       ) : (
@@ -483,7 +483,7 @@ export const PatientExamSchedulePage: React.FC<PatientPageProps> = ({ user }) =>
               </select>
             </div>
             <div>
-              <label className="mb-2 block text-sm font-black text-[#06296F]">Solicitacao</label>
+              <label className="mb-2 block text-sm font-black text-[#06296F]">Solicitação</label>
               <input className={inputClass} value={form.requestCode} onChange={event => setForm({ ...form, requestCode: event.target.value })} required />
             </div>
             <div>
@@ -498,7 +498,7 @@ export const PatientExamSchedulePage: React.FC<PatientPageProps> = ({ user }) =>
                 <input className={inputClass} min={new Date().toISOString().split('T')[0]} type="date" value={form.date} onChange={event => setForm({ ...form, date: event.target.value })} required />
               </div>
               <div>
-                <label className="mb-2 block text-sm font-black text-[#06296F]">Horario</label>
+              <label className="mb-2 block text-sm font-black text-[#06296F]">Horário</label>
                 <input className={inputClass} type="time" value={form.time} onChange={event => setForm({ ...form, time: event.target.value })} required />
               </div>
             </div>
@@ -541,23 +541,23 @@ export const PatientExamsPage: React.FC<PatientPageProps> = ({ user }) => {
   const visibleExams = exams.filter(exam => tab === 'scheduled' ? exam.status === ExamStatus.SCHEDULED : exam.status === ExamStatus.AVAILABLE);
 
   const downloadDemoResult = (exam: Exam) => {
-    const content = `Resultado ficticio - ${exam.type}\nPaciente: demonstracao\nData: ${formatDate(exam.date)}\n\nEste arquivo e apenas demonstrativo.`;
+    const content = `Resultado - ${exam.type}\nPaciente: ${user.name}\nData: ${formatDate(exam.date)}\n\nArquivo gerado pelo Conecta Saúde Olinda.`;
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `resultado-ficticio-${exam.type.toLowerCase().replace(/\s+/g, '-')}.txt`;
+    link.download = `resultado-${exam.type.toLowerCase().replace(/\s+/g, '-')}.txt`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    setFeedback('Arquivo ficticio gerado para demonstracao.');
+    setFeedback('Arquivo de resultado gerado.');
   };
 
   return (
     <PatientPageShell
       title="Meus exames"
-      description="Consulte exames agendados e resultados ficticios com badges consistentes."
+      description="Consulte exames agendados, resultados e orientações de preparo."
       action={<Link className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#0B60C9] px-5 font-black text-white hover:bg-[#0847AA]" to="/patient-portal/exams/schedule"><FlaskConical className="h-5 w-5" />Agendar exame</Link>}
     >
       {feedback && <Feedback type="info" message={feedback} />}
@@ -568,7 +568,7 @@ export const PatientExamsPage: React.FC<PatientPageProps> = ({ user }) => {
       {loading ? (
         <LoadingState />
       ) : visibleExams.length === 0 ? (
-        <EmptyState icon={FlaskConical} title="Nenhum exame nesta aba" description="Agende um exame de demonstracao ou consulte outra aba." />
+        <EmptyState icon={FlaskConical} title="Nenhum exame nesta aba" description="Agende um exame ou consulte outra aba." />
       ) : (
         <div className="grid gap-4">
           {visibleExams.map(exam => (
@@ -577,7 +577,7 @@ export const PatientExamsPage: React.FC<PatientPageProps> = ({ user }) => {
                 <div>
                   <ExamBadge status={exam.status} />
                   <h2 className="mt-3 text-xl font-black text-[#10223F]">{exam.type}</h2>
-                  <p className="mt-1 text-sm font-semibold text-[#5F708A]">Solicitacao: {exam.requestCode || 'DEMO'}</p>
+                  <p className="mt-1 text-sm font-semibold text-[#5F708A]">Solicitação: {exam.requestCode || 'Sem código'}</p>
                 </div>
                 <div className="text-sm font-bold text-[#10223F] sm:text-right">
                   <p>{formatDate(exam.date)}</p>
@@ -588,7 +588,7 @@ export const PatientExamsPage: React.FC<PatientPageProps> = ({ user }) => {
               {exam.status === ExamStatus.AVAILABLE && (
                 <button type="button" onClick={() => downloadDemoResult(exam)} className="mt-4 inline-flex h-10 items-center gap-2 rounded-xl border border-[#CFE7FF] px-4 text-sm font-black text-[#0B60C9] hover:bg-[#F7FBFF]">
                   <Download className="h-4 w-4" />
-                  Baixar resultado ficticio
+                  Baixar resultado
                 </button>
               )}
             </article>
@@ -632,7 +632,7 @@ export const PatientRemindersPage: React.FC<PatientPageProps> = ({ user }) => {
       localStorage.setItem(storageKey, JSON.stringify(preferences));
     } finally {
       setSaving(false);
-      setFeedback('Preferencias salvas no modo demonstracao.');
+      setFeedback('Preferências salvas.');
     }
   };
 
@@ -657,7 +657,7 @@ export const PatientRemindersPage: React.FC<PatientPageProps> = ({ user }) => {
           ))}
         </div>
         <div>
-          <label className="mb-2 block text-sm font-black text-[#06296F]">Antecedencia do lembrete</label>
+          <label className="mb-2 block text-sm font-black text-[#06296F]">Antecedência do lembrete</label>
           <select className={inputClass} value={preferences.leadTimeHours} onChange={event => setPreferences({ ...preferences, leadTimeHours: Number(event.target.value) })}>
             <option value={6}>6 horas antes</option>
             <option value={12}>12 horas antes</option>
@@ -671,18 +671,18 @@ export const PatientRemindersPage: React.FC<PatientPageProps> = ({ user }) => {
         </label>
         <button type="button" disabled={saving} onClick={save} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#0B60C9] px-5 font-black text-white hover:bg-[#0847AA] disabled:opacity-60 sm:w-fit">
           {saving ? <Loader2 className="h-5 w-5 animate-spin" /> : <BellRing className="h-5 w-5" />}
-          Salvar preferencias
+          Salvar preferências
         </button>
       </div>
       <div className="grid gap-4">
-        {['Consulta de clinica geral em 24 horas', 'Exame de sangue em 2 dias', 'Resultado ficticio disponivel'].map((message, index) => (
+        {['Consulta de clínica geral em 24 horas', 'Exame de sangue em 2 dias', 'Resultado disponível'].map((message, index) => (
           <div key={message} className={`${cardClass} flex items-center gap-4 p-4`}>
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#EAF6FF] text-[#0B60C9]">
               <BellRing className="h-5 w-5" />
             </div>
             <div>
               <p className="font-black text-[#10223F]">{message}</p>
-              <p className="text-sm font-semibold text-[#5F708A]">{index === 0 ? 'Proximo lembrete' : 'Historico de demonstracao'}</p>
+              <p className="text-sm font-semibold text-[#5F708A]">{index === 0 ? 'Próximo lembrete' : 'Histórico de lembretes'}</p>
             </div>
           </div>
         ))}
@@ -707,8 +707,8 @@ export const PatientInformationPage: React.FC = () => {
     },
     {
       id: 'emergency',
-      question: 'Posso usar o portal em uma emergencia?',
-      answer: 'Nao. Em urgencias, procure imediatamente o servico de urgencia apropriado ou acione os canais oficiais de emergencia.',
+      question: 'Posso usar o portal em uma emergência?',
+      answer: 'Não. Em urgências, procure imediatamente o serviço de urgência apropriado ou acione os canais oficiais de emergência.',
     },
   ];
   const filteredFaqs = faqs.filter(item => `${item.question} ${item.answer}`.toLowerCase().includes(query.toLowerCase()));
@@ -720,7 +720,7 @@ export const PatientInformationPage: React.FC = () => {
         <input className="h-10 flex-1 bg-transparent text-sm font-semibold outline-none" value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar pergunta" />
       </div>
       <div className="rounded-2xl border border-[#FFC7CC] bg-[#FFE6E8] p-4 text-sm font-bold text-[#97111B]">
-        Esta area nao substitui atendimento medico. Em caso de urgencia, procure uma unidade de emergencia ou acione os canais oficiais.
+        Esta área não substitui atendimento médico. Em caso de urgência, procure uma unidade de emergência ou acione os canais oficiais.
       </div>
       <div className="space-y-3">
         {filteredFaqs.map(item => (
@@ -742,7 +742,7 @@ export const PatientInformationPage: React.FC = () => {
         <div className={`${cardClass} p-5`}>
           <Phone className="mb-3 h-6 w-6 text-[#048C47]" />
           <h2 className="font-black text-[#10223F]">Central municipal</h2>
-          <p className="mt-1 text-sm font-semibold text-[#5F708A]">(81) 0000-0000 - demonstracao</p>
+          <p className="mt-1 text-sm font-semibold text-[#5F708A]">(81) 0000-0000</p>
         </div>
       </div>
     </PatientPageShell>
@@ -752,10 +752,10 @@ export const PatientInformationPage: React.FC = () => {
 export const NotFoundPage: React.FC = () => (
   <div className="min-h-[60vh] rounded-2xl border border-[#D9E6F5] bg-white p-8 text-center shadow-[0_8px_20px_rgba(6,41,111,0.08)]">
     <HelpCircle className="mx-auto h-12 w-12 text-[#0B60C9]" />
-    <h1 className="mt-4 text-3xl font-black text-[#06296F]">Pagina nao encontrada</h1>
+    <h1 className="mt-4 text-3xl font-black text-[#06296F]">Página não encontrada</h1>
     <p className="mx-auto mt-2 max-w-md text-sm font-semibold text-[#5F708A]">A rota solicitada não existe no Conecta Saúde Olinda.</p>
     <Link to="/" className="mt-6 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#0B60C9] px-5 font-black text-white hover:bg-[#0847AA]">
-      Voltar ao inicio
+      Voltar ao início
       <RotateCcw className="h-5 w-5" />
     </Link>
   </div>

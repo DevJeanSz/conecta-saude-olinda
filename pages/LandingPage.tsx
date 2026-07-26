@@ -102,19 +102,19 @@ export const LandingPage: React.FC = () => (
       <aside className="hero-service-card" aria-label="Resumo do serviço">
         <div className="hero-card-top">
           <span className="live-dot" aria-hidden="true" />
-          Rede municipal conectada
+          Atendimento conectado
         </div>
-        <strong>Seu cuidado começa aqui</strong>
+        <strong>Acesse os serviços da rede</strong>
         <div className="hero-card-grid">
           <Link to="/login">
             <CalendarDays size={22} aria-hidden="true" />
-            <span>Agende</span>
-            <small>sua consulta</small>
+            <span>Agendar</span>
+            <small>consulta</small>
           </Link>
           <Link to="/login">
             <Users size={22} aria-hidden="true" />
-            <span>Acompanhe</span>
-            <small>seu atendimento</small>
+            <span>Acompanhar</span>
+            <small>atendimento</small>
           </Link>
         </div>
       </aside>
@@ -149,19 +149,19 @@ export const LandingPage: React.FC = () => (
     <section className="municipal-section" id="projeto">
       <div>
         <span className="municipal-kicker">Prefeitura Municipal de Olinda</span>
-        <h2>Uma rede inteira trabalhando em conexão</h2>
+        <h2>Unidades, equipes e cidadãos no mesmo fluxo</h2>
         <p>
-          O Conecta Saúde Olinda aproxima o cidadão dos serviços municipais e
-          dá às equipes uma visão mais clara de cada atendimento.
+          O Conecta Saúde Olinda organiza agendamentos, recepção e
+          acompanhamento em uma jornada única para a rede municipal.
         </p>
       </div>
       <div className="municipal-stat">
         <strong>24h</strong>
-        <span>acesso às suas informações</span>
+        <span>portal disponível para solicitações</span>
       </div>
       <div className="municipal-stat" id="unidades">
-        <strong>1 só</strong>
-        <span>portal para toda a rede</span>
+        <strong>Rede única</strong>
+        <span>unidades e equipes conectadas</span>
       </div>
     </section>
 

@@ -104,7 +104,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <BrowserRouter>
+    <BrowserRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
       <Routes>
         <Route path="/" element={<LandingRoute />} />
         <Route path="/login" element={<LoginRoute />} />
