@@ -4503,6 +4503,10 @@ button {
   width: min(560px, 100%);
 }
 
+.schedule-create-card {
+  width: min(760px, 100%);
+}
+
 .schedule-modal-header {
   align-items: center;
   border-bottom: 1px solid var(--border);
@@ -4548,6 +4552,23 @@ button {
   padding: 22px;
 }
 
+.schedule-create-form {
+  gap: 20px;
+}
+
+.schedule-form-section {
+  display: grid;
+  gap: 12px;
+}
+
+.schedule-form-section > span {
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
 .schedule-form label,
 .schedule-detail-body label {
   color: var(--text);
@@ -4588,10 +4609,22 @@ button {
   box-shadow: 0 0 0 3px rgba(11, 96, 201, 0.14);
 }
 
+.schedule-form select:disabled,
+.schedule-form input:disabled,
+.schedule-form textarea:disabled {
+  background: #f3f7fb;
+  color: #8191a6;
+  cursor: not-allowed;
+}
+
 .schedule-form-grid {
   display: grid;
   gap: 14px;
   grid-template-columns: 1fr 1fr;
+}
+
+.schedule-form-grid .field-wide {
+  grid-column: 1 / -1;
 }
 
 .schedule-checkbox {

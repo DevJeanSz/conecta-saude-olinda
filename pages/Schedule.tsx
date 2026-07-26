@@ -36,7 +36,7 @@ const TIME_SLOTS = Array.from({ length: 20 }, (_, index) => {
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 });
 
-const APPOINTMENT_TYPES = ['Consulta', 'Retorno', 'Encaixe', 'Avaliação', 'Exame'];
+const normalizeDigits = (value = '') => value.replace(/\D/g, '');
 
 const toDateInputValue = (date: Date) => {
   const year = date.getFullYear();
@@ -81,12 +81,30 @@ const statusClass = {
   [AppointmentStatus.NO_SHOW]: 'no-show',
 };
 
+const canManageAllUnits = (user: User) =>
+  user.role === UserRole.ADMIN || user.role === UserRole.GENERAL_SUPERVISOR;
+
+const getUserUnitIds = (user: User) =>
+  Array.from(new Set([user.unitId, ...(user.unitIds || [])].filter(Boolean) as string[]));
+
+const isSpecialtyEnabledForUnit = (specialty: Specialty, unitId: string) =>
+  Boolean(unitId && (specialty.isGlobal || specialty.unitIds?.includes(unitId)));
+
+const formatDateOption = (value: string) =>
+  parseDateInput(value).toLocaleDateString('pt-BR', {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'long',
+  });
+
 export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [doctors, setDoctors] = useState<User[]>([]);
   const [specialties, setSpecialties] = useState<Specialty[]>([]);
+  const [units, setUnits] = useState<HealthUnit[]>([]);
   const [unit, setUnit] = useState<HealthUnit | null>(null);
+  const [selectedUnitId, setSelectedUnitId] = useState(user.unitId || user.unitIds?.[0] || '');
   const [selectedDate, setSelectedDate] = useState(toDateInputValue(new Date()));
   const [query, setQuery] = useState('');
   const [loadingSchedule, setLoadingSchedule] = useState(true);
@@ -95,35 +113,52 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
   const [showDetailModal, setShowDetailModal] = useState<Appointment | null>(null);
   const [doctorNotes, setDoctorNotes] = useState('');
   const [newApptData, setNewApptData] = useState({
-    patientId: '',
-    doctorId: '',
+    patientName: '',
+    susNumber: '',
+    cpf: '',
+    rg: '',
+    address: '',
+    unitId: user.unitId || user.unitIds?.[0] || '',
+    specialtyId: '',
     date: selectedDate,
-    time: '09:00',
-    endTime: '09:30',
-    type: 'Consulta',
+    time: '',
     notes: '',
     returnVisit: false,
   });
 
   const loadData = async () => {
-    if (!user.unitId) {
-      setAppointments([]);
-      setPatients([]);
-      setDoctors([]);
-      setSpecialties([]);
-      setUnit(null);
-      setLoadingSchedule(false);
-      return;
-    }
-
     setLoadingSchedule(true);
     try {
-      const [unitAppts, unitPatients, unitDoctors, allSpecialties, unitData] = await Promise.all([
-        api.appointments.getByUnit(user.unitId),
-        api.patients.getByUnit(user.unitId),
-        api.users.getDoctorsByUnit(user.unitId),
+      const [allUnits, allSpecialties] = await Promise.all([
+        api.units.getAll(),
         api.specialties.getAll(),
-        api.units.getById(user.unitId),
+      ]);
+      const userUnitIds = getUserUnitIds(user);
+      const visibleUnits = canManageAllUnits(user)
+        ? allUnits
+        : allUnits.filter((availableUnit) => userUnitIds.includes(availableUnit.id));
+      const activeUnitId = selectedUnitId || user.unitId || visibleUnits[0]?.id || '';
+
+      setUnits(visibleUnits);
+
+      if (!activeUnitId) {
+        setAppointments([]);
+        setPatients([]);
+        setDoctors([]);
+        setSpecialties(allSpecialties);
+        setUnit(null);
+        return;
+      }
+
+      if (selectedUnitId !== activeUnitId) {
+        setSelectedUnitId(activeUnitId);
+      }
+
+      const [unitAppts, unitPatients, unitDoctors, unitData] = await Promise.all([
+        api.appointments.getByUnit(activeUnitId),
+        api.patients.getByUnit(activeUnitId),
+        api.users.getDoctorsByUnit(activeUnitId),
+        api.units.getById(activeUnitId),
       ]);
 
       const scopedAppointments = user.role === UserRole.DOCTOR
@@ -135,12 +170,17 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
       setDoctors(unitDoctors);
       setSpecialties(allSpecialties);
       setUnit(unitData);
+      setNewApptData((current) => ({
+        ...current,
+        unitId: current.unitId || activeUnitId,
+      }));
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
       setAppointments([]);
       setPatients([]);
       setDoctors([]);
       setSpecialties([]);
+      setUnits([]);
       setUnit(null);
     } finally {
       setLoadingSchedule(false);
@@ -149,19 +189,27 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
 
   useEffect(() => {
     loadData();
-  }, [user.id, user.unitId]);
+  }, [user.id, user.unitId, selectedUnitId]);
 
   const selectedDateObj = useMemo(() => parseDateInput(selectedDate), [selectedDate]);
   const weekStart = useMemo(() => getWorkWeekStart(selectedDateObj), [selectedDateObj]);
   const visibleDays = useMemo(() => Array.from({ length: 5 }, (_, index) => addDays(weekStart, index)), [weekStart]);
 
-  const validSpecialtyIds = specialties
-    .filter((specialty) => specialty.isGlobal || (specialty.unitIds && specialty.unitIds.includes(user.unitId || '')))
-    .map((specialty) => specialty.id);
+  const activeUnitId = selectedUnitId || user.unitId || '';
 
-  const validDoctors = doctors.filter(
-    (doctor) => doctor.specialtyId && validSpecialtyIds.includes(doctor.specialtyId),
+  const validSpecialties = useMemo(() => specialties.filter((specialty) =>
+    isSpecialtyEnabledForUnit(specialty, activeUnitId) &&
+    doctors.some((doctor) => doctor.specialtyId === specialty.id),
+  ), [activeUnitId, doctors, specialties]);
+
+  const validSpecialtyIds = useMemo(
+    () => validSpecialties.map((specialty) => specialty.id),
+    [validSpecialties],
   );
+
+  const validDoctors = useMemo(() => doctors.filter(
+    (doctor) => doctor.specialtyId && validSpecialtyIds.includes(doctor.specialtyId),
+  ), [doctors, validSpecialtyIds]);
 
   const patientNameById = useMemo(() => new Map(patients.map((patient) => [patient.id, patient.name])), [patients]);
   const doctorNameById = useMemo(() => new Map(doctors.map((doctor) => [doctor.id, doctor.name])), [doctors]);
@@ -197,117 +245,211 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
     return filteredAppointments.filter((appointment) => dayValues.has(appointment.date)).length;
   }, [filteredAppointments, visibleDays]);
 
-  const getSpecialtyName = (id?: string) => specialties.find((specialty) => specialty.id === id)?.name || '';
+  const isScheduleOpen = (schedule: { dayOfWeek: number; startTime: string; endTime: string }[] | undefined, date: string, time?: string) => {
+    if (!schedule || schedule.length === 0) return true;
+    const dayOfWeek = parseDateInput(date).getDay();
+    return schedule.some((item) =>
+      item.dayOfWeek === dayOfWeek &&
+      (!time || (time >= item.startTime && time < item.endTime)),
+    );
+  };
 
-  const openAppointmentModal = (date = selectedDate, time = '09:00', type = 'Consulta') => {
+  const hasSpecialtyDailyCapacity = (specialtyId: string, date: string, sourceAppointments = appointments) => {
+    const selectedSpecialty = specialties.find((specialty) => specialty.id === specialtyId);
+    if (!selectedSpecialty?.maxDailyAppointments) return true;
+    const specialtyDoctorIds = doctors
+      .filter((doctor) => doctor.specialtyId === specialtyId)
+      .map((doctor) => doctor.id);
+    const specialtyDailyCount = sourceAppointments.filter(
+      (appointment) =>
+        specialtyDoctorIds.includes(appointment.doctorId) &&
+        appointment.date === date &&
+        appointment.status !== AppointmentStatus.CANCELLED,
+    ).length;
+    return specialtyDailyCount < selectedSpecialty.maxDailyAppointments;
+  };
+
+  const getAvailableDoctorsForSlot = (
+    unitId: string,
+    specialtyId: string,
+    date: string,
+    time: string,
+    sourceAppointments = appointments,
+  ) => {
+    if (!unitId || !specialtyId || !date || !time) return [];
+    const selectedSpecialty = specialties.find((specialty) => specialty.id === specialtyId);
+    if (!selectedSpecialty || !isSpecialtyEnabledForUnit(selectedSpecialty, unitId)) return [];
+    if (!isScheduleOpen(selectedSpecialty.schedule, date, time)) return [];
+    if (!hasSpecialtyDailyCapacity(specialtyId, date, sourceAppointments)) return [];
+
+    return validDoctors.filter((doctor) => {
+      if (doctor.specialtyId !== specialtyId) return false;
+      if (!isScheduleOpen(doctor.schedule, date, time)) return false;
+
+      const dailyAppointments = sourceAppointments.filter(
+        (appointment) =>
+          appointment.doctorId === doctor.id &&
+          appointment.date === date &&
+          appointment.status !== AppointmentStatus.CANCELLED,
+      );
+
+      if (doctor.maxDailyPatients && dailyAppointments.length >= doctor.maxDailyPatients) return false;
+
+      return !dailyAppointments.some((appointment) => appointment.time === time);
+    });
+  };
+
+  const getAvailableDateOptions = (unitId: string, specialtyId: string) => {
+    if (!unitId || !specialtyId) return [];
+
+    return Array.from({ length: 60 }, (_, index) => toDateInputValue(addDays(new Date(), index)))
+      .filter((date) => {
+        const selectedSpecialty = specialties.find((specialty) => specialty.id === specialtyId);
+        if (!selectedSpecialty) return false;
+        if (!isScheduleOpen(selectedSpecialty.schedule, date)) return false;
+        if (!hasSpecialtyDailyCapacity(specialtyId, date)) return false;
+        return TIME_SLOTS.some((time) => getAvailableDoctorsForSlot(unitId, specialtyId, date, time).length > 0);
+      })
+      .map((date) => ({
+        value: date,
+        label: formatDateOption(date),
+      }));
+  };
+
+  const getAvailableTimeOptions = (unitId: string, specialtyId: string, date: string) => {
+    if (!unitId || !specialtyId || !date) return [];
+    return TIME_SLOTS.filter((time) => getAvailableDoctorsForSlot(unitId, specialtyId, date, time).length > 0);
+  };
+
+  const availableDateOptions = useMemo(
+    () => getAvailableDateOptions(newApptData.unitId, newApptData.specialtyId),
+    [appointments, doctors, newApptData.specialtyId, newApptData.unitId, specialties, validDoctors],
+  );
+
+  const availableTimeOptions = useMemo(
+    () => getAvailableTimeOptions(newApptData.unitId, newApptData.specialtyId, newApptData.date),
+    [appointments, doctors, newApptData.date, newApptData.specialtyId, newApptData.unitId, specialties, validDoctors],
+  );
+
+  const openAppointmentModal = (date = selectedDate, time = '') => {
+    const defaultUnitId = selectedUnitId || units[0]?.id || user.unitId || '';
     setSelectedDate(date);
     setNewApptData({
-      patientId: '',
-      doctorId: validDoctors[0]?.id || '',
+      patientName: '',
+      susNumber: '',
+      cpf: '',
+      rg: '',
+      address: '',
+      unitId: defaultUnitId,
+      specialtyId: '',
       date,
       time,
-      endTime: TIME_SLOTS[Math.min(TIME_SLOTS.indexOf(time) + 1, TIME_SLOTS.length - 1)] || time,
-      type,
       notes: '',
-      returnVisit: type === 'Retorno',
+      returnVisit: false,
     });
     setShowNewApptModal(true);
   };
 
-  const handleSchedule = async (e: React.FormEvent) => {
+  const handleCreateSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newApptData.patientId || !newApptData.doctorId || !user.unitId) return;
 
-    const selectedDoctor = doctors.find((doctor) => doctor.id === newApptData.doctorId);
-    const selectedSpecialty = selectedDoctor?.specialtyId
-      ? specialties.find(specialty => specialty.id === selectedDoctor.specialtyId)
-      : null;
-    const allAppts = await api.appointments.getByUnit(user.unitId);
-
-    if (selectedSpecialty) {
-      if (!selectedSpecialty.isGlobal && (!selectedSpecialty.unitIds || !selectedSpecialty.unitIds.includes(user.unitId))) {
-        alert('A especialidade deste profissional não está habilitada para esta unidade.');
-        return;
-      }
-
-      if (selectedSpecialty.schedule && selectedSpecialty.schedule.length > 0) {
-        const dateObj = parseDateInput(newApptData.date);
-        const dayOfWeek = dateObj.getDay();
-        const isAttendedDay = selectedSpecialty.schedule.some(schedule => schedule.dayOfWeek === dayOfWeek);
-
-        if (!isAttendedDay) {
-          alert(`A especialidade ${selectedSpecialty.name} não atende neste dia da semana.`);
-          return;
-        }
-      }
-
-      if (selectedSpecialty.maxDailyAppointments) {
-        const specialtyDoctorIds = doctors.filter(doctor => doctor.specialtyId === selectedSpecialty.id).map(doctor => doctor.id);
-        const specialtyDailyCount = allAppts.filter(
-          (appointment) =>
-            specialtyDoctorIds.includes(appointment.doctorId) &&
-            appointment.date === newApptData.date &&
-            appointment.status !== AppointmentStatus.CANCELLED,
-        ).length;
-
-        if (specialtyDailyCount >= selectedSpecialty.maxDailyAppointments) {
-          alert(`Limite da especialidade atingido: a cota diária de ${selectedSpecialty.maxDailyAppointments} atendimentos para ${selectedSpecialty.name} foi atingida.`);
-          return;
-        }
-      }
-    }
-
-    if (selectedDoctor && selectedDoctor.maxDailyPatients) {
-      const dailyCount = allAppts.filter(
-        (appointment) =>
-          appointment.doctorId === newApptData.doctorId &&
-          appointment.date === newApptData.date &&
-          appointment.status !== AppointmentStatus.CANCELLED,
-      ).length;
-
-      if (dailyCount >= selectedDoctor.maxDailyPatients) {
-        alert(`Limite diário atingido: Dr(a). ${selectedDoctor.name} já atingiu ${selectedDoctor.maxDailyPatients} atendimentos para esta data.`);
-        return;
-      }
-    }
-
-    const conflict = allAppts.find(
-      (appointment) =>
-        appointment.doctorId === newApptData.doctorId &&
-        appointment.date === newApptData.date &&
-        appointment.time === newApptData.time &&
-        appointment.status !== AppointmentStatus.CANCELLED,
-    );
-
-    if (conflict) {
-      alert('Este profissional já possui um agendamento nesse horário.');
+    if (
+      !newApptData.patientName.trim() ||
+      !newApptData.susNumber.trim() ||
+      !newApptData.cpf.trim() ||
+      !newApptData.rg.trim() ||
+      !newApptData.address.trim() ||
+      !newApptData.unitId ||
+      !newApptData.specialtyId ||
+      !newApptData.date ||
+      !newApptData.time
+    ) {
+      alert('Preencha todos os campos obrigatórios do agendamento.');
       return;
     }
 
+    const selectedSpecialty = specialties.find((specialty) => specialty.id === newApptData.specialtyId);
+    if (!selectedSpecialty || !isSpecialtyEnabledForUnit(selectedSpecialty, newApptData.unitId)) {
+      alert('A especialidade selecionada não está habilitada para esta unidade.');
+      return;
+    }
+
+    const allAppts = await api.appointments.getByUnit(newApptData.unitId);
+    if (!isScheduleOpen(selectedSpecialty.schedule, newApptData.date, newApptData.time)) {
+      alert(`A especialidade ${selectedSpecialty.name} não atende nesta data ou horário.`);
+      return;
+    }
+
+    if (!hasSpecialtyDailyCapacity(selectedSpecialty.id, newApptData.date, allAppts)) {
+      alert(`Limite da especialidade atingido: a cota diária de ${selectedSpecialty.maxDailyAppointments} atendimentos para ${selectedSpecialty.name} foi atingida.`);
+      return;
+    }
+
+    const availableDoctorsForSlot = getAvailableDoctorsForSlot(
+      newApptData.unitId,
+      selectedSpecialty.id,
+      newApptData.date,
+      newApptData.time,
+      allAppts,
+    );
+    const selectedDoctor = availableDoctorsForSlot[0];
+
+    if (!selectedDoctor) {
+      alert('Não há profissional disponível para a especialidade, data e horário selecionados.');
+      return;
+    }
+
+    const cpfDigits = normalizeDigits(newApptData.cpf);
+    const susDigits = normalizeDigits(newApptData.susNumber);
+    const existingPatient = patients.find((patient) =>
+      normalizeDigits(patient.cpf) === cpfDigits ||
+      Boolean(patient.susNumber && normalizeDigits(patient.susNumber) === susDigits),
+    );
+    const patientUnitIds = Array.from(new Set([
+      ...(existingPatient?.unitIds || []),
+      existingPatient?.unitId,
+      newApptData.unitId,
+    ].filter(Boolean) as string[]));
+
     const notes = [
-      `Tipo: ${newApptData.type}`,
+      `Tipo: ${newApptData.returnVisit ? 'Retorno' : 'Consulta'}`,
+      `Especialidade: ${selectedSpecialty.name}`,
       newApptData.returnVisit ? 'Retorno: sim' : '',
-      newApptData.endTime ? `Horário final previsto: ${newApptData.endTime}` : '',
       newApptData.notes.trim(),
     ].filter(Boolean).join('\n');
 
     setSaving(true);
     try {
+      const patientPayload: Omit<Patient, 'id'> = {
+        name: newApptData.patientName.trim(),
+        susNumber: newApptData.susNumber.trim(),
+        cpf: newApptData.cpf.trim(),
+        rg: newApptData.rg.trim(),
+        address: newApptData.address.trim(),
+        phone: existingPatient?.phone || '(00) 00000-0000',
+        birthDate: existingPatient?.birthDate || '1900-01-01',
+        unitId: newApptData.unitId,
+        unitIds: patientUnitIds,
+      };
+
+      const patient = existingPatient
+        ? await api.patients.update(existingPatient.id, patientPayload)
+        : await api.patients.add(patientPayload);
+
       await api.appointments.add({
-        patientId: newApptData.patientId,
-        doctorId: newApptData.doctorId,
+        patientId: patient.id,
+        doctorId: selectedDoctor.id,
         date: newApptData.date,
         time: newApptData.time,
-        unitId: user.unitId,
+        unitId: newApptData.unitId,
         notes,
       });
 
-      if (user.id !== newApptData.doctorId) {
-        const patientName = patientNameById.get(newApptData.patientId) ?? 'Paciente';
+      if (user.id !== selectedDoctor.id) {
         const dateFormatted = parseDateInput(newApptData.date).toLocaleDateString('pt-BR');
         await api.notifications.add(
-          newApptData.doctorId,
-          `Nova consulta agendada: ${patientName} em ${dateFormatted} às ${newApptData.time}`,
+          selectedDoctor.id,
+          `Nova consulta agendada: ${patient.name} em ${dateFormatted} às ${newApptData.time}`,
         );
       }
 
@@ -356,7 +498,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
         </div>
         {user.role !== UserRole.DOCTOR && (
           <div className="schedule-hero-actions">
-            <button className="button button-secondary" onClick={() => openAppointmentModal(toDateInputValue(new Date()), getCurrentSlot(), 'Encaixe')} type="button">
+            <button className="button button-secondary" onClick={() => openAppointmentModal(toDateInputValue(new Date()), getCurrentSlot())} type="button">
               <Sparkles size={18} /> Agendar agora
             </button>
             <button className="button button-primary" onClick={() => openAppointmentModal(selectedDate, '09:00')} type="button">
@@ -526,7 +668,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
 
       {showNewApptModal && (
         <div className="schedule-modal-backdrop">
-          <div className="schedule-modal-card">
+          <div className="schedule-modal-card schedule-create-card">
             <div className="schedule-modal-header">
               <div>
                 <Calendar size={24} />
@@ -537,90 +679,179 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
               </button>
             </div>
 
-            <form onSubmit={handleSchedule} className="schedule-form">
-              <label>
-                Paciente
-                <select
-                  required
-                  value={newApptData.patientId}
-                  onChange={(event) => setNewApptData({ ...newApptData, patientId: event.target.value })}
-                >
-                  <option value="">Selecione um paciente</option>
-                  {patients.map((patient) => (
-                    <option key={patient.id} value={patient.id}>{patient.name}</option>
-                  ))}
-                </select>
-              </label>
+            <form onSubmit={handleCreateSchedule} className="schedule-form schedule-create-form">
+              <div className="schedule-form-section">
+                <span>Dados do paciente</span>
+                <div className="schedule-form-grid">
+                  <label className="field-wide">
+                    Nome do paciente
+                    <input
+                      autoFocus
+                      onChange={(event) => setNewApptData({ ...newApptData, patientName: event.target.value })}
+                      placeholder="Nome completo"
+                      required
+                      value={newApptData.patientName}
+                    />
+                  </label>
 
-              <label>
-                Profissional
-                <select
-                  required
-                  value={newApptData.doctorId}
-                  onChange={(event) => setNewApptData({ ...newApptData, doctorId: event.target.value })}
-                >
-                  <option value="">Selecione um profissional</option>
-                  {validDoctors.map((doctor) => (
-                    <option key={doctor.id} value={doctor.id}>
-                      {doctor.name}{getSpecialtyName(doctor.specialtyId) ? ` - ${getSpecialtyName(doctor.specialtyId)}` : ''}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  <label>
+                    Cartão do SUS
+                    <input
+                      inputMode="numeric"
+                      onChange={(event) => setNewApptData({ ...newApptData, susNumber: event.target.value })}
+                      placeholder="000 0000 0000 0000"
+                      required
+                      value={newApptData.susNumber}
+                    />
+                  </label>
 
-              <label>
-                Tipo de agendamento
-                <select
-                  value={newApptData.type}
-                  onChange={(event) => setNewApptData({ ...newApptData, type: event.target.value, returnVisit: event.target.value === 'Retorno' })}
-                >
-                  {APPOINTMENT_TYPES.map((type) => <option key={type}>{type}</option>)}
-                </select>
-              </label>
+                  <label>
+                    CPF
+                    <input
+                      inputMode="numeric"
+                      onChange={(event) => setNewApptData({ ...newApptData, cpf: event.target.value })}
+                      placeholder="000.000.000-00"
+                      required
+                      value={newApptData.cpf}
+                    />
+                  </label>
 
-              <div className="schedule-form-grid">
-                <label>
-                  Horário inicial
-                  <select
-                    required
-                    value={newApptData.time}
-                    onChange={(event) => setNewApptData({ ...newApptData, time: event.target.value })}
-                  >
-                    {TIME_SLOTS.map((time) => <option key={time}>{time}</option>)}
-                  </select>
-                </label>
-                <label>
-                  Horário final
-                  <select
-                    value={newApptData.endTime}
-                    onChange={(event) => setNewApptData({ ...newApptData, endTime: event.target.value })}
-                  >
-                    {TIME_SLOTS.map((time) => <option key={time}>{time}</option>)}
-                  </select>
-                </label>
+                  <label>
+                    RG
+                    <input
+                      onChange={(event) => setNewApptData({ ...newApptData, rg: event.target.value })}
+                      placeholder="Documento de identidade"
+                      required
+                      value={newApptData.rg}
+                    />
+                  </label>
+
+                  <label className="field-wide">
+                    Endereço
+                    <input
+                      onChange={(event) => setNewApptData({ ...newApptData, address: event.target.value })}
+                      placeholder="Rua, número, bairro e complemento"
+                      required
+                      value={newApptData.address}
+                    />
+                  </label>
+                </div>
               </div>
 
-              <label>
-                Data
-                <input
-                  required
-                  type="date"
-                  value={newApptData.date}
-                  onChange={(event) => {
-                    setSelectedDate(event.target.value);
-                    setNewApptData({ ...newApptData, date: event.target.value });
-                  }}
-                />
-              </label>
+              <div className="schedule-form-section">
+                <span>Agenda</span>
+                <div className="schedule-form-grid">
+                  <label>
+                    Unidade
+                    <select
+                      onChange={(event) => {
+                        const unitId = event.target.value;
+                        setSelectedUnitId(unitId);
+                        setNewApptData({
+                          ...newApptData,
+                          unitId,
+                          specialtyId: '',
+                          date: '',
+                          time: '',
+                        });
+                      }}
+                      required
+                      value={newApptData.unitId}
+                    >
+                      <option value="">Selecione uma unidade</option>
+                      {units.map((availableUnit) => (
+                        <option key={availableUnit.id} value={availableUnit.id}>{availableUnit.name}</option>
+                      ))}
+                    </select>
+                  </label>
 
-              <label>
-                Observações
-                <textarea
-                  onChange={(event) => setNewApptData({ ...newApptData, notes: event.target.value })}
-                  placeholder="Orientações, motivo do encaixe ou observações da recepção."
-                  value={newApptData.notes}
-                />
-              </label>
+                  <label>
+                    Especialidade
+                    <select
+                      disabled={!newApptData.unitId}
+                      onChange={(event) => {
+                        const specialtyId = event.target.value;
+                        const dates = getAvailableDateOptions(newApptData.unitId, specialtyId);
+                        const date = dates.some((option) => option.value === newApptData.date)
+                          ? newApptData.date
+                          : dates[0]?.value || '';
+                        const times = date ? getAvailableTimeOptions(newApptData.unitId, specialtyId, date) : [];
+                        const time = times.includes(newApptData.time) ? newApptData.time : times[0] || '';
+
+                        if (date) {
+                          setSelectedDate(date);
+                        }
+
+                        setNewApptData({
+                          ...newApptData,
+                          specialtyId,
+                          date,
+                          time,
+                        });
+                      }}
+                      required
+                      value={newApptData.specialtyId}
+                    >
+                      <option value="">Selecione uma especialidade</option>
+                      {validSpecialties.map((specialty) => (
+                        <option key={specialty.id} value={specialty.id}>{specialty.name}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label>
+                    Data
+                    <select
+                      disabled={!newApptData.specialtyId || availableDateOptions.length === 0}
+                      onChange={(event) => {
+                        const date = event.target.value;
+                        const times = getAvailableTimeOptions(newApptData.unitId, newApptData.specialtyId, date);
+                        setSelectedDate(date);
+                        setNewApptData({
+                          ...newApptData,
+                          date,
+                          time: times.includes(newApptData.time) ? newApptData.time : times[0] || '',
+                        });
+                      }}
+                      required
+                      value={availableDateOptions.some((option) => option.value === newApptData.date) ? newApptData.date : ''}
+                    >
+                      <option value="">
+                        {newApptData.specialtyId ? 'Selecione uma data disponível' : 'Escolha a especialidade primeiro'}
+                      </option>
+                      {availableDateOptions.map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label>
+                    Horário
+                    <select
+                      disabled={!newApptData.date || availableTimeOptions.length === 0}
+                      onChange={(event) => setNewApptData({ ...newApptData, time: event.target.value })}
+                      required
+                      value={availableTimeOptions.includes(newApptData.time) ? newApptData.time : ''}
+                    >
+                      <option value="">
+                        {newApptData.date ? 'Selecione um horário disponível' : 'Escolha a data primeiro'}
+                      </option>
+                      {availableTimeOptions.map((time) => (
+                        <option key={time} value={time}>{time}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="field-wide">
+                    Observação (opcional)
+                    <textarea
+                      onChange={(event) => setNewApptData({ ...newApptData, notes: event.target.value })}
+                      placeholder="Orientações, motivo do atendimento ou observações da recepção."
+                      value={newApptData.notes}
+                    />
+                  </label>
+                </div>
+              </div>
 
               <label className="schedule-checkbox">
                 <input
@@ -628,7 +859,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
                   onChange={(event) => setNewApptData({ ...newApptData, returnVisit: event.target.checked })}
                   type="checkbox"
                 />
-                Retorno
+                É retorno
               </label>
 
               <div className="schedule-modal-actions">
