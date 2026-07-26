@@ -1650,10 +1650,10 @@ const syncCnes = async () => {
   setSyncProgress({ progress: 10, message: 'Iniciando busca no CNES...' });
   try {
      // Limpar sujeira de sincronizações anteriores incorretas (ex: SP/RJ)
-     await pool.query("DELETE FROM units WHERE cnes_code IS NOT NULL AND city NOT ILIKE '%Olinda%' AND local_override = false");
+     await pool.query("DELETE FROM units WHERE cnes_code IS NOT NULL AND (city IS NULL OR city NOT ILIKE '%Olinda%') AND local_override = false");
      setSyncProgress({ progress: 15, message: 'Limpando dados inconsistentes...' });
 
-      const ibgeCode = '260775'; // Olinda (6 digits)
+      const ibgeCode = '260960'; // Olinda (6 digits - IMPORTANTE: a API só aceita 6 dígitos)
       const response = await fetch(`https://apidadosabertos.saude.gov.br/cnes/estabelecimentos?codigo_municipio=${ibgeCode}&limit=100`);
      if (response.ok) {
         const data = await response.json();
