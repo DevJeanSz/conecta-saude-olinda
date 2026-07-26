@@ -1,6 +1,25 @@
 # Conecta Saude Olinda
 
+# Conecta Saúde Olinda
+
 Protótipo funcional full-stack para organizar acesso a servicos da rede municipal de saude de Olinda, com dados ficticios de desenvolvimento.
+
+## Arquitetura
+
+</div>
+
+O **Conecta Saúde Olinda** é uma plataforma para digitalizar, organizar e otimizar o atendimento de saúde da rede pública municipal, cobrindo desde o acesso do cidadão até a gestão operacional das unidades.
+
+Protótipo funcional full-stack para organizar acesso a servicos da rede municipal de saude de Olinda, com dados ficticios de desenvolvimento.
+
+## Principais funcionalidades
+
+- Portal do cidadao com agendamento, consultas, historico, exames, lembretes e informacoes.
+- Painel administrativo para unidades, equipe, especialidades, pacientes, agenda, recepcao e relatorios.
+- Display de chamada para recepcao em `/display-tv`.
+- Integracao CNES por endpoints dedicados de sincronizacao.
+- Notificacoes e eventos em tempo real via Socket.IO.
+- Separacao entre frontend, API, regras de dominio e PostgreSQL.
 
 ## Arquitetura
 
@@ -32,6 +51,7 @@ O frontend usa apenas `services/api.ts` para chamar endpoints HTTP. Ele nao impo
 
 1. Instale dependencias:
 
+```
 ```bash
 npm install
 ```
