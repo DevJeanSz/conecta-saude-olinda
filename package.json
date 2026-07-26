@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:sites": "npm run build && node scripts/build-sites-artifact.mjs",
     "start": "node scripts/serve-dist.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "node scripts/check-frontend-boundaries.mjs",
