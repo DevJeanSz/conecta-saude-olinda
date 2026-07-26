@@ -71,6 +71,7 @@ const apiResponse = (message, status = 503) =>
   });
 
 const fromBase64 = (value) => Uint8Array.from(atob(value), (character) => character.charCodeAt(0));
+const gunzipBody = (value) => new Blob([fromBase64(value)]).stream().pipeThrough(new DecompressionStream('gzip'));
 
 const normalizeBackendOrigin = (env) => {
   const rawOrigin = env.API_ORIGIN || env.VITE_API_URL || env.BACKEND_URL || '';
@@ -94,14 +95,13 @@ const serveAsset = (path, method) => {
 
   const headers = new Headers({
     'content-type': asset.contentType,
-    'content-encoding': 'gzip',
     'x-content-type-options': 'nosniff',
     'cache-control': path.startsWith('/assets/')
       ? 'public, max-age=31536000, immutable'
       : 'no-cache',
   });
 
-  return new Response(method === 'HEAD' ? null : fromBase64(asset.body), { headers });
+  return new Response(method === 'HEAD' ? null : gunzipBody(asset.body), { headers });
 };
 
 const proxyApiRequest = async (request, env) => {
