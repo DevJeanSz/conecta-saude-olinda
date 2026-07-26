@@ -13,6 +13,7 @@ import {
   MapPin,
   MonitorPlay,
   Moon,
+  Search,
   Sun,
   UserPlus,
   Users,
@@ -35,9 +36,21 @@ const menuItems = [
   { label: 'Especialidades', path: '/admin/specialties', icon: ListPlus, roles: [UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR] },
   { label: 'Pacientes', path: '/admin/patients', icon: Users, roles: [UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR, UserRole.ATTENDANT, UserRole.SOCIAL_WORKER] },
   { label: 'Agendamentos', path: '/admin/schedule', icon: Calendar, roles: [UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR, UserRole.ATTENDANT, UserRole.DOCTOR] },
-  { label: 'Recepcao e Senhas', path: '/admin/reception', icon: MonitorPlay, roles: [UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR, UserRole.ATTENDANT] },
-  { label: 'Relatorios', path: '/admin/reports', icon: FileText, roles: [UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR] },
+  { label: 'Recepção e Senhas', path: '/admin/reception', icon: MonitorPlay, roles: [UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR, UserRole.ATTENDANT] },
+  { label: 'Relatórios', path: '/admin/reports', icon: FileText, roles: [UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR] },
 ];
+
+const pageTitles: Record<string, string> = {
+  '/admin': 'Painel gestor',
+  '/admin/units': 'Unidades de Saúde',
+  '/admin/users': 'Equipe e Profissionais',
+  '/admin/specialties': 'Especialidades',
+  '/admin/patients': 'Pacientes',
+  '/admin/schedule': 'Agendamentos',
+  '/admin/reception': 'Painel da Recepção',
+  '/admin/reports': 'Relatórios',
+  '/perfil': 'Meu perfil',
+};
 
 export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   const navigate = useNavigate();
@@ -93,133 +106,137 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   };
 
   const unreadCount = notifications.filter(notification => !notification.read).length;
+  const title = pageTitles[location.pathname] || 'Gestão municipal';
+  const roleLabel = user.role === UserRole.ADMIN ? 'Gestor municipal' : 'Profissional de saúde';
 
   return (
-    <div className="flex h-screen bg-[#F7FBFF] text-[#10223F]">
-      <aside className="z-20 flex w-64 shrink-0 flex-col border-r border-[#D9E6F5] bg-white shadow-sm">
-        <div className="flex flex-col items-center border-b border-[#D9E6F5] p-6">
-          <BrandLockup compact />
+    <main className="admin-page">
+      <aside className="admin-sidebar">
+        <div className="admin-brand">
+          <BrandLockup />
         </div>
 
-        <div className="border-b border-[#D9E6F5] bg-[#F7FBFF] px-6 py-4">
-          <div className="flex items-center gap-2 text-[#5F708A]">
-            <MapPin className="h-4 w-4 text-[#D51F2A]" />
-            <span className="truncate text-xs font-black uppercase" title={unitName}>{unitName}</span>
-          </div>
+        <div className="admin-unit-chip">
+          <MapPin size={16} />
+          <span title={unitName}>{unitName}</span>
         </div>
 
-        <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-4">
-          {menuItems.filter(item => item.roles.includes(user.role)).map(item => (
+        <nav aria-label="Administração">
+          <span>Visão geral</span>
+          {menuItems.filter(item => item.roles.includes(user.role)).map((item, index) => (
             <button
+              className={location.pathname === item.path ? 'active' : ''}
               key={item.path}
               onClick={() => navigate(item.path)}
-              className={`flex h-12 items-center gap-3 rounded-xl px-4 text-sm font-black transition-colors ${
-                location.pathname === item.path
-                  ? 'bg-[#0B60C9] text-white shadow-[0_8px_20px_rgba(6,41,111,0.12)]'
-                  : 'text-[#5F708A] hover:bg-[#F1F7FD] hover:text-[#0B60C9]'
-              }`}
               type="button"
             >
-              <item.icon className="h-5 w-5" />
-              {item.label}
+              <item.icon size={19} />
+              <span>{item.label}</span>
+              {index === 5 && <small>{unreadCount || ''}</small>}
             </button>
           ))}
         </nav>
 
-        <div className="m-4 rounded-2xl bg-[#EAF6FF] p-5">
-          <p className="text-sm font-black text-[#10223F]">Precisa de ajuda?</p>
-          <p className="mt-1 text-xs font-semibold text-[#5F708A]">Acesse suporte tecnico do Conecta Saude Olinda.</p>
-          <a href="mailto:conectasaude@olinda.pe.gov.br" className="mt-3 inline-flex text-xs font-black text-[#0B60C9] hover:underline">
-            Abrir suporte
-          </a>
+        <div className="admin-sidebar-footer">
+          <div>
+            <span>{getInitials(user.name)}</span>
+            <div>
+              <strong>{user.name}</strong>
+              <small>{roleLabel}</small>
+            </div>
+          </div>
+          <button aria-label="Sair" onClick={onLogout} type="button">
+            <LogOut size={18} />
+          </button>
         </div>
       </aside>
 
-      <main className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden bg-[#F7FBFF] dark:bg-slate-900">
-        <header className="z-10 flex h-16 items-center justify-end gap-4 border-b border-[#D9E6F5] bg-white px-8 shadow-sm dark:border-slate-800 dark:bg-slate-950">
-          <button
-            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-            className="flex h-10 w-10 items-center justify-center rounded-xl text-[#5F708A] transition-colors hover:bg-[#F1F7FD] hover:text-[#0B60C9] dark:hover:bg-slate-800"
-            title={theme === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
-            type="button"
-          >
-            {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-          </button>
+      <div className="admin-main">
+        <header className="admin-topbar">
+          <div>
+            <span>{unitName}</span>
+            <h1>{title}</h1>
+          </div>
+          <div className="admin-top-actions">
+            <label className="admin-search">
+              <Search size={18} />
+              <input aria-label="Buscar" placeholder="Buscar no sistema..." />
+            </label>
 
-          <div className="relative">
             <button
-              onClick={() => setShowNotifMenu(!showNotifMenu)}
-              className="relative flex h-10 w-10 items-center justify-center rounded-xl text-[#5F708A] transition-colors hover:bg-[#F1F7FD] hover:text-[#0B60C9]"
+              aria-label={theme === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
+              className="icon-button"
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
               type="button"
-              aria-label="Abrir notificacoes"
             >
-              <Bell className="h-5 w-5" />
-              {unreadCount > 0 && <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full border-2 border-white bg-[#D51F2A]" />}
+              {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
             </button>
 
-            {showNotifMenu && (
-              <div className="absolute right-0 z-50 mt-2 w-80 overflow-hidden rounded-2xl border border-[#D9E6F5] bg-white shadow-[0_24px_64px_rgba(6,41,111,0.16)]">
-                <div className="border-b border-[#D9E6F5] bg-[#F7FBFF] p-3 text-sm font-black text-[#10223F]">Notificacoes</div>
-                <div className="max-h-72 overflow-y-auto">
-                  {notifications.length === 0 ? (
-                    <div className="p-4 text-center text-sm font-semibold text-[#5F708A]">Nenhuma notificacao nova.</div>
-                  ) : (
-                    notifications.map(notification => (
-                      <button
-                        key={notification.id}
-                        onClick={() => handleRead(notification.id)}
-                        className={`block w-full border-b border-[#F1F7FD] p-3 text-left hover:bg-[#F7FBFF] ${!notification.read ? 'bg-[#DFF0FF]/50' : ''}`}
-                        type="button"
-                      >
-                        <p className={`text-sm ${!notification.read ? 'font-black text-[#10223F]' : 'font-semibold text-[#5F708A]'}`}>{notification.message}</p>
-                        <span className="text-[10px] font-bold text-[#8A99AD]">{new Date(notification.createdAt).toLocaleString('pt-BR')}</span>
-                      </button>
-                    ))
-                  )}
+            <div className="admin-popover-anchor">
+              <button
+                aria-label="Notificações"
+                className="icon-button"
+                onClick={() => setShowNotifMenu(!showNotifMenu)}
+                type="button"
+              >
+                <Bell size={20} />
+                {unreadCount > 0 && <span />}
+              </button>
+
+              {showNotifMenu && (
+                <div className="admin-dropdown notification-dropdown">
+                  <div className="dropdown-title">Notificações</div>
+                  <div className="dropdown-scroll">
+                    {notifications.length === 0 ? (
+                      <div className="dropdown-empty">Nenhuma notificação nova.</div>
+                    ) : (
+                      notifications.map(notification => (
+                        <button
+                          className={!notification.read ? 'unread' : ''}
+                          key={notification.id}
+                          onClick={() => handleRead(notification.id)}
+                          type="button"
+                        >
+                          <strong>{notification.message}</strong>
+                          <small>{new Date(notification.createdAt).toLocaleString('pt-BR')}</small>
+                        </button>
+                      ))
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
-
-          <div className="relative flex cursor-pointer items-center gap-3 border-l border-[#D9E6F5] pl-6" onClick={() => setShowProfileMenu(!showProfileMenu)}>
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#06296F] text-sm font-black text-white">
-              {getInitials(user.name)}
+              )}
             </div>
-            <div className="flex flex-col">
-              <span className="text-sm font-black text-[#10223F] dark:text-slate-100">{user.name}</span>
-              <span className="text-xs font-semibold text-[#5F708A]">{user.role === UserRole.ADMIN ? 'Gestor' : 'Profissional de saude'}</span>
-            </div>
-            <ChevronDown className="ml-1 h-4 w-4 text-[#8A99AD]" />
 
-            {showProfileMenu && (
-              <div className="absolute right-0 top-full z-50 mt-2 w-52 overflow-hidden rounded-2xl border border-[#D9E6F5] bg-white shadow-[0_16px_36px_rgba(6,41,111,0.12)]">
-                <button
-                  onClick={() => { setShowProfileMenu(false); navigate('/perfil'); }}
-                  className="flex w-full items-center gap-2 border-b border-[#F1F7FD] px-4 py-3 text-left text-sm font-black text-[#10223F] hover:bg-[#F7FBFF]"
-                  type="button"
-                >
-                  <UserPlus className="h-4 w-4" />
-                  Meu Perfil
-                </button>
-                <button
-                  onClick={onLogout}
-                  className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-black text-[#D51F2A] hover:bg-[#FFE6E8]"
-                  type="button"
-                >
-                  <LogOut className="h-4 w-4" />
-                  Sair do Sistema
-                </button>
-              </div>
-            )}
+            <div className="admin-popover-anchor">
+              <button className="admin-profile-button" onClick={() => setShowProfileMenu(!showProfileMenu)} type="button">
+                <span className="admin-avatar">{getInitials(user.name)}</span>
+                <ChevronDown size={16} />
+              </button>
+
+              {showProfileMenu && (
+                <div className="admin-dropdown profile-dropdown">
+                  <button
+                    onClick={() => {
+                      setShowProfileMenu(false);
+                      navigate('/perfil');
+                    }}
+                    type="button"
+                  >
+                    Meu perfil
+                  </button>
+                  <button className="danger" onClick={onLogout} type="button">
+                    Sair do sistema
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
-        <div className="flex-1 overflow-auto p-8">
-          <div className="mx-auto max-w-[1400px]">
-            {children}
-          </div>
+        <div className="admin-content-shell">
+          {children}
         </div>
-      </main>
-    </div>
+      </div>
+    </main>
   );
 };

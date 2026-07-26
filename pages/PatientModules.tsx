@@ -714,7 +714,7 @@ export const PatientInformationPage: React.FC = () => {
   const filteredFaqs = faqs.filter(item => `${item.question} ${item.answer}`.toLowerCase().includes(query.toLowerCase()));
 
   return (
-    <PatientPageShell title="Informacoes" description="Duvidas comuns sobre o Conecta Saude Olinda e canais de atendimento.">
+    <PatientPageShell title="Informações" description="Dúvidas comuns sobre o Conecta Saúde Olinda e canais de atendimento.">
       <div className={`${cardClass} flex items-center gap-3 p-3`}>
         <Search className="h-5 w-5 text-[#8A99AD]" />
         <input className="h-10 flex-1 bg-transparent text-sm font-semibold outline-none" value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar pergunta" />
@@ -753,7 +753,7 @@ export const NotFoundPage: React.FC = () => (
   <div className="min-h-[60vh] rounded-2xl border border-[#D9E6F5] bg-white p-8 text-center shadow-[0_8px_20px_rgba(6,41,111,0.08)]">
     <HelpCircle className="mx-auto h-12 w-12 text-[#0B60C9]" />
     <h1 className="mt-4 text-3xl font-black text-[#06296F]">Pagina nao encontrada</h1>
-    <p className="mx-auto mt-2 max-w-md text-sm font-semibold text-[#5F708A]">A rota solicitada nao existe no Conecta Saude Olinda.</p>
+    <p className="mx-auto mt-2 max-w-md text-sm font-semibold text-[#5F708A]">A rota solicitada não existe no Conecta Saúde Olinda.</p>
     <Link to="/" className="mt-6 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#0B60C9] px-5 font-black text-white hover:bg-[#0847AA]">
       Voltar ao inicio
       <RotateCcw className="h-5 w-5" />

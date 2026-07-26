@@ -1,7 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Appointment, Patient, User, HealthUnit, AppointmentStatus } from '../types';
 import { api } from '../services/api';
-import { Users, MonitorPlay, Clock, CheckCircle2, Ticket } from 'lucide-react';
+import {
+  AlertCircle,
+  CheckCircle2,
+  Clock3,
+  MonitorPlay,
+  MoreHorizontal,
+  PhoneCall,
+  Search,
+  Users,
+} from 'lucide-react';
 
 interface ReceptionProps {
   user: User;
@@ -12,7 +21,7 @@ export const Reception: React.FC<ReceptionProps> = ({ user }) => {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [doctors, setDoctors] = useState<User[]>([]);
   const [unit, setUnit] = useState<HealthUnit | null>(null);
-  
+
   const today = new Date().toISOString().split('T')[0];
 
   const loadData = async () => {
@@ -22,22 +31,21 @@ export const Reception: React.FC<ReceptionProps> = ({ user }) => {
         api.appointments.getByUnit(user.unitId),
         api.patients.getByUnit(user.unitId),
         api.users.getDoctorsByUnit(user.unitId),
-        api.units.getById(user.unitId)
+        api.units.getById(user.unitId),
       ]);
 
-      const todaysAppts = appts.filter(a => a.date === today && a.status !== 'CANCELLED');
+      const todaysAppts = appts.filter(appointment => appointment.date === today && appointment.status !== AppointmentStatus.CANCELLED);
       setAppointments(todaysAppts.sort((a, b) => a.time.localeCompare(b.time)));
       setPatients(pts);
       setDoctors(docs);
       setUnit(unitData);
     } catch (error) {
-      console.error("Erro ao carregar dados da recepção", error);
+      console.error('Erro ao carregar dados da recepção', error);
     }
   };
 
   useEffect(() => {
     loadData();
-    // Refresh queue every 10 seconds
     const interval = setInterval(loadData, 10000);
     return () => clearInterval(interval);
   }, [user?.unitId]);
@@ -52,136 +60,159 @@ export const Reception: React.FC<ReceptionProps> = ({ user }) => {
     loadData();
   };
 
-  const getPatientName = (id: string) => patients.find(p => p.id === id)?.name || 'Desconhecido';
-  const getDoctorName = (id: string) => doctors.find(d => d.id === id)?.name || 'Médico';
+  const getPatientName = (id: string) => patients.find(patient => patient.id === id)?.name || 'Desconhecido';
+  const getDoctorName = (id: string) => doctors.find(doctor => doctor.id === id)?.name || 'Médico';
+  const getInitials = (name: string) => name.split(' ').map(part => part[0]).slice(0, 2).join('').toUpperCase();
 
   const isSenhaMode = unit?.attendanceType === 'SENHA';
-
-  const waitingQueue = appointments.filter(a => a.checkInTime && a.status !== 'COMPLETED');
-  const expectedToday = appointments.filter(a => !a.checkInTime);
+  const waitingQueue = appointments.filter(appointment => appointment.checkInTime && appointment.status !== AppointmentStatus.COMPLETED);
+  const expectedToday = appointments.filter(appointment => !appointment.checkInTime);
+  const currentCall = useMemo(
+    () => appointments.filter(appointment => appointment.calledAt).sort((a, b) => new Date(b.calledAt!).getTime() - new Date(a.calledAt!).getTime())[0],
+    [appointments],
+  );
+  const preferentialCount = waitingQueue.filter(appointment => appointment.queuePassword?.startsWith('P-')).length;
+  const averageWait = waitingQueue.length ? `${Math.max(1, Math.round(waitingQueue.length * 4))} min` : '0 min';
+  const nextWaiting = waitingQueue[0];
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="reception-content">
+      <section className="reception-heading">
         <div>
-           <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Painel da Recepção</h2>
-           <p className="text-sm text-slate-500 dark:text-slate-400">Gerencie a fila de espera e o check-in dos pacientes hoje</p>
+          <span>Recepção conectada</span>
+          <h2>Gerencie o fluxo da unidade</h2>
+          <p>Check-in, fila de espera, senhas e chamadas em um só painel.</p>
         </div>
         {isSenhaMode && (
-          <button 
+          <button
+            className="button button-primary"
             onClick={() => window.open('/display-tv', '_blank')}
-            className="flex items-center gap-2 bg-slate-800 dark:bg-slate-700 text-white px-4 py-2 rounded-lg hover:bg-slate-900 transition-colors"
+            type="button"
           >
-            <MonitorPlay className="w-5 h-5" />
-            Abrir Painel de TV
+            <MonitorPlay size={19} /> Abrir Painel de TV
           </button>
         )}
-      </div>
+      </section>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Expected Patients */}
-        <div className="bg-white dark:bg-slate-950 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 flex flex-col">
-          <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-900/50">
-             <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                 <Clock className="w-5 h-5 text-slate-400" />
-                 Aguardando Check-in ({expectedToday.length})
-             </h3>
-          </div>
-          <div className="p-5 flex-1 overflow-y-auto max-h-[600px] space-y-3">
-             {expectedToday.length === 0 ? (
-                 <p className="text-slate-500 text-center py-8">Nenhum paciente aguardando check-in.</p>
-             ) : (
-                 expectedToday.map(appt => (
-                     <div key={appt.id} className="border border-slate-200 dark:border-slate-800 rounded-xl p-4 hover:border-primary transition-colors">
-                         <div className="flex justify-between items-start mb-3">
-                             <div>
-                                 <h4 className="font-bold text-slate-800 dark:text-slate-100 text-lg">{getPatientName(appt.patientId)}</h4>
-                                 <p className="text-sm text-slate-500">Horário agendado: <span className="font-semibold text-slate-700 dark:text-slate-300">{appt.time}</span></p>
-                                 <p className="text-sm text-slate-500">Dr(a). {getDoctorName(appt.doctorId)}</p>
-                             </div>
-                         </div>
-                         <div className="flex gap-2">
-                             {isSenhaMode ? (
-                                 <>
-                                    <button 
-                                        onClick={() => generatePassword(appt.id, false)}
-                                        className="flex-1 bg-primary text-white py-2 rounded-lg text-sm font-medium hover:bg-primary-dark transition-colors"
-                                    >
-                                        Gerar Senha (Geral)
-                                    </button>
-                                    <button 
-                                        onClick={() => generatePassword(appt.id, true)}
-                                        className="flex-1 bg-amber-500 text-white py-2 rounded-lg text-sm font-medium hover:bg-amber-600 transition-colors"
-                                    >
-                                        Gerar Senha (Pref)
-                                    </button>
-                                 </>
-                             ) : (
-                                 <button 
-                                     onClick={() => generatePassword(appt.id, false)}
-                                     className="flex-1 bg-emerald-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
-                                 >
-                                     <CheckCircle2 className="w-4 h-4" /> Confirmar Chegada
-                                 </button>
-                             )}
-                         </div>
-                     </div>
-                 ))
-             )}
-          </div>
-        </div>
+      <section className="reception-metrics">
+        {[
+          ['Atendidos hoje', String(appointments.filter(appointment => appointment.status === AppointmentStatus.COMPLETED).length), CheckCircle2, 'green'],
+          ['Na fila', String(waitingQueue.length), Users, 'blue'],
+          ['Tempo médio', averageWait, Clock3, 'yellow'],
+          ['Prioridades', String(preferentialCount).padStart(2, '0'), AlertCircle, 'red'],
+        ].map(([label, value, Icon, tone]) => {
+          const MetricIcon = Icon as typeof CheckCircle2;
+          return (
+            <article key={String(label)}>
+              <span className={`metric-icon ${tone}`}>
+                <MetricIcon size={21} />
+              </span>
+              <div>
+                <small>{label as string}</small>
+                <strong>{value as string}</strong>
+              </div>
+            </article>
+          );
+        })}
+      </section>
 
-        {/* Checked-in / Queue */}
-        <div className="bg-white dark:bg-slate-950 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 flex flex-col">
-          <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-900/50">
-             <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                 <Users className="w-5 h-5 text-primary" />
-                 Fila de Espera ({waitingQueue.length})
-             </h3>
+      <section className="reception-grid">
+        <article className="checkin-card">
+          <div className="card-header">
+            <div>
+              <h3>Agenda de hoje</h3>
+              <p>Próximos pacientes da unidade</p>
+            </div>
+            <label className="small-search">
+              <Search size={17} />
+              <input aria-label="Buscar paciente" placeholder="Buscar paciente" />
+            </label>
           </div>
-          <div className="p-5 flex-1 overflow-y-auto max-h-[600px] space-y-3">
-             {waitingQueue.length === 0 ? (
-                 <p className="text-slate-500 text-center py-8">Fila vazia.</p>
-             ) : (
-                 waitingQueue.sort((a, b) => new Date(a.checkInTime!).getTime() - new Date(b.checkInTime!).getTime()).map(appt => (
-                     <div key={appt.id} className="border border-slate-200 dark:border-slate-800 rounded-xl p-4 flex justify-between items-center">
-                         <div>
-                             <div className="flex items-center gap-3 mb-1">
-                                 {isSenhaMode && appt.queuePassword && (
-                                    <span className="bg-primary/10 text-primary font-bold px-3 py-1 rounded-lg flex items-center gap-1">
-                                        <Ticket className="w-4 h-4" /> {appt.queuePassword}
-                                    </span>
-                                 )}
-                                 <h4 className="font-bold text-slate-800 dark:text-slate-100">{getPatientName(appt.patientId)}</h4>
-                             </div>
-                             <p className="text-sm text-slate-500">Aguardando Dr(a). {getDoctorName(appt.doctorId)}</p>
-                             <p className="text-xs text-slate-400 mt-1">Check-in: {new Date(appt.checkInTime!).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
-                         </div>
-                         <div className="flex flex-col gap-2">
-                            {isSenhaMode && (
-                                <button 
-                                    onClick={() => callToTV(appt.id)}
-                                    className="bg-slate-800 dark:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-900 transition-colors flex items-center gap-2"
-                                >
-                                    <MonitorPlay className="w-4 h-4" /> Chamar TV
-                                </button>
-                            )}
-                            <button 
-                                onClick={async () => {
-                                    await api.appointments.update(appt.id, { status: AppointmentStatus.COMPLETED });
-                                    loadData();
-                                }}
-                                className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-200 dark:hover:bg-emerald-900/50 transition-colors"
-                            >
-                                Finalizar
-                            </button>
-                         </div>
-                     </div>
-                 ))
-             )}
+
+          <div className="queue-table">
+            <div className="queue-table-head">
+              <span>Paciente</span>
+              <span>Serviço</span>
+              <span>Horário</span>
+              <span>Status</span>
+              <span />
+            </div>
+
+            {[...waitingQueue, ...expectedToday].slice(0, 8).map((appointment) => {
+              const patientName = getPatientName(appointment.patientId);
+              const checkedIn = Boolean(appointment.checkInTime);
+              return (
+                <div className="queue-table-row" key={appointment.id}>
+                  <span className="patient-cell">
+                    <i>{getInitials(patientName)}</i>
+                    <strong>{patientName}</strong>
+                  </span>
+                  <span>{getDoctorName(appointment.doctorId)}</span>
+                  <span>{appointment.time}</span>
+                  <span className={`status-badge ${checkedIn ? 'completed' : 'scheduled'}`}>
+                    {checkedIn ? 'Check-in feito' : 'Aguardando'}
+                  </span>
+                  {checkedIn ? (
+                    <button aria-label={`Opções para ${patientName}`} onClick={() => callToTV(appointment.id)} type="button">
+                      <MonitorPlay size={19} />
+                    </button>
+                  ) : (
+                    <button aria-label={`Gerar senha para ${patientName}`} onClick={() => generatePassword(appointment.id, false)} type="button">
+                      <MoreHorizontal size={19} />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </div>
-        </div>
-      </div>
+        </article>
+
+        <aside className="call-card">
+          <span className="call-kicker">
+            <span /> Chamada atual
+          </span>
+          <div className="ticket-display">
+            <small>SENHA</small>
+            <strong>{currentCall?.queuePassword || nextWaiting?.queuePassword || '--'}</strong>
+            <span>GUICHÊ 02</span>
+          </div>
+          <div className="called-person">
+            <span>{getInitials(currentCall ? getPatientName(currentCall.patientId) : nextWaiting ? getPatientName(nextWaiting.patientId) : 'CS')}</span>
+            <div>
+              <strong>{currentCall ? getPatientName(currentCall.patientId) : nextWaiting ? getPatientName(nextWaiting.patientId) : 'Aguardando chamada'}</strong>
+              <small>{currentCall ? getDoctorName(currentCall.doctorId) : nextWaiting ? getDoctorName(nextWaiting.doctorId) : unit?.name || 'Rede municipal'}</small>
+            </div>
+          </div>
+          <button
+            className="button button-success"
+            disabled={!nextWaiting}
+            onClick={() => nextWaiting && callToTV(nextWaiting.id)}
+            type="button"
+          >
+            <PhoneCall size={18} /> Chamar próxima senha
+          </button>
+          <button
+            className="button button-secondary"
+            disabled={!currentCall}
+            onClick={() => currentCall && callToTV(currentCall.id)}
+            type="button"
+          >
+            Repetir chamada
+          </button>
+          {nextWaiting && (
+            <button
+              className="button button-secondary"
+              onClick={async () => {
+                await api.appointments.update(nextWaiting.id, { status: AppointmentStatus.COMPLETED });
+                loadData();
+              }}
+              type="button"
+            >
+              Finalizar atendimento
+            </button>
+          )}
+        </aside>
+      </section>
     </div>
   );
 };

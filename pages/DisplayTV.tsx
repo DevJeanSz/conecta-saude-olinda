@@ -1,19 +1,27 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Appointment, Patient, User } from '../types';
 import { api } from '../services/api';
-import { Info, Volume2 } from 'lucide-react';
-import prefeituraLogo from '@/src/assets/images/prefeitura-olinda-oficial.svg';
-import olindaHero from '@/src/assets/images/olinda-hero-conecta-saude.svg';
+import { HeartPulse, Info, UserRoundCheck } from 'lucide-react';
+import { BrandLockup } from '../components/BrandLockup';
+import { PernambucoStripe } from '../components/VisualPrimitives';
 
 interface DisplayTVProps {
   user: User | null;
 }
+
+const demoCalls = [
+  { ticket: 'A-023', location: 'GUICHÊ 02', service: 'CLÍNICA GERAL', patient: 'Lucas Moura', time: '09:42' },
+  { ticket: 'A-022', location: 'SALA 03', service: 'PRIORIDADE', patient: 'Marina Silva', time: '09:35' },
+  { ticket: 'E-014', location: 'SALA 05', service: 'EXAMES', patient: 'José Carlos', time: '09:20' },
+  { ticket: 'A-021', location: 'GUICHÊ 01', service: 'PEDIATRIA', patient: 'Lúcia Ferreira', time: '09:12' },
+];
 
 export const DisplayTV: React.FC<DisplayTVProps> = ({ user }) => {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [doctors, setDoctors] = useState<User[]>([]);
   const [lastCalledId, setLastCalledId] = useState<string | null>(null);
+  const [now, setNow] = useState(() => new Date());
 
   const loadData = async () => {
     if (!user?.unitId) return;
@@ -38,6 +46,11 @@ export const DisplayTV: React.FC<DisplayTVProps> = ({ user }) => {
     return () => clearInterval(interval);
   }, [user?.unitId]);
 
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   const today = new Date().toISOString().split('T')[0];
   const calledAppts = appointments
     .filter((appointment) => appointment.calledAt && appointment.queuePassword && appointment.date === today)
@@ -49,16 +62,16 @@ export const DisplayTV: React.FC<DisplayTVProps> = ({ user }) => {
   const getPatientName = (id: string) => patients.find((patient) => patient.id === id)?.name || '';
   const getDoctorName = (id: string) => doctors.find((doctor) => doctor.id === id)?.name || '';
   const getCallLabel = (appointment: Appointment) => {
-    if (appointment.queuePassword?.startsWith('P-')) return 'Prioridade';
-    if (appointment.queuePassword?.startsWith('E-')) return 'Exames';
-    return getDoctorName(appointment.doctorId) || 'Atendimento';
+    if (appointment.queuePassword?.startsWith('P-')) return 'PRIORIDADE';
+    if (appointment.queuePassword?.startsWith('E-')) return 'EXAMES';
+    return getDoctorName(appointment.doctorId).toUpperCase() || 'ATENDIMENTO';
   };
   const getCallLocation = (appointment: Appointment, index: number) => {
     if (appointment.queuePassword?.startsWith('P-') || appointment.queuePassword?.startsWith('E-')) {
-      return `Sala ${String(index + 2).padStart(2, '0')}`;
+      return `SALA ${String(index + 2).padStart(2, '0')}`;
     }
 
-    return `Guichê ${String((index % 3) + 1).padStart(2, '0')}`;
+    return `GUICHÊ ${String((index % 3) + 1).padStart(2, '0')}`;
   };
 
   useEffect(() => {
@@ -76,115 +89,111 @@ export const DisplayTV: React.FC<DisplayTVProps> = ({ user }) => {
     }
   }, [currentCall, lastCalledId]);
 
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white text-2xl font-bold">
-        Acesso Negado ou Não Autenticado
-      </div>
-    );
-  }
+  const time = now.toLocaleTimeString('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  const date = now.toLocaleDateString('pt-BR', {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'long',
+  });
+
+  const currentDisplay = useMemo(() => {
+    if (currentCall) {
+      return {
+        ticket: currentCall.queuePassword || '--',
+        location: getCallLocation(currentCall, 0),
+        service: getCallLabel(currentCall),
+        patient: getPatientName(currentCall.patientId),
+      };
+    }
+
+    if (!user) return demoCalls[0];
+    return null;
+  }, [currentCall, user, patients, doctors]);
+
+  const recentDisplay = recentCalls.length
+    ? recentCalls.map((appointment, index) => ({
+      ticket: appointment.queuePassword || '--',
+      location: getCallLocation(appointment, index),
+      service: getCallLabel(appointment),
+      patient: getPatientName(appointment.patientId),
+      time: new Date(appointment.calledAt!).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+    }))
+    : (!user ? demoCalls : []);
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-slate-950 text-white flex font-sans selection:bg-primary/30">
-      <div
-        className="absolute inset-0 bg-cover bg-center opacity-20"
-        style={{ backgroundImage: `url(${olindaHero})` }}
-        aria-hidden="true"
-      />
-      <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/95 to-slate-900/90" aria-hidden="true" />
+    <main className="tv-page">
+      <PernambucoStripe />
+      <header className="tv-header">
+        <BrandLockup light />
+        <div>
+          <span>{user?.unitId ? 'Unidade conectada' : 'USF Bairro Novo'}</span>
+          <strong>{time}</strong>
+          <small>{date}</small>
+        </div>
+      </header>
 
-      <main className="relative z-10 flex-1 flex flex-col justify-center items-center p-12">
-        <div className="absolute top-8 left-8 flex items-center gap-5">
-          <img
-            src={prefeituraLogo}
-            alt="Prefeitura de Olinda"
-            className="h-16 w-auto rounded-xl bg-white p-2 shadow-lg shadow-black/30"
-          />
-          <div className="bg-primary text-white p-3 rounded-xl shadow-lg shadow-primary/20">
-            <Volume2 className="w-8 h-8" />
+      <section className="tv-content">
+        <div className="tv-current-call">
+          <div className="tv-live">
+            <span /> Chamada atual
           </div>
+          <p>Por favor, dirija-se ao local indicado</p>
+          <strong>{currentDisplay?.ticket || '--'}</strong>
+          <div className="tv-destination">
+            <span>
+              <small>LOCAL</small>
+              <strong>{currentDisplay?.location || 'AGUARDE'}</strong>
+            </span>
+            <i />
+            <span>
+              <small>ATENDIMENTO</small>
+              <strong>{currentDisplay?.service || 'SEM CHAMADA'}</strong>
+            </span>
+          </div>
+          <div className="tv-person">
+            <UserRoundCheck size={24} />
+            <span>
+              <small>Paciente</small>
+              <strong>{currentDisplay?.patient || 'Aguardando chamada'}</strong>
+            </span>
+          </div>
+        </div>
+
+        <aside className="tv-next">
           <div>
-            <h1 className="text-3xl font-black tracking-tight bg-gradient-to-r from-white to-white/70 bg-clip-text text-transparent">
-              Conecta Saúde
-            </h1>
-            <p className="text-sm font-bold uppercase tracking-[0.22em] text-blue-100">Olinda</p>
+            <span>Últimas senhas chamadas</span>
+            <small>Aguarde sua chamada</small>
           </div>
-        </div>
-
-        {currentCall ? (
-          <div className="text-center w-full max-w-4xl animate-in fade-in zoom-in duration-500">
-            <p className="text-4xl text-slate-400 font-bold tracking-widest uppercase mb-4">Senha</p>
-            <div className="text-[12rem] leading-none font-black text-primary mb-8 tracking-tighter drop-shadow-2xl">
-              {currentCall.queuePassword}
-            </div>
-
-            <div className="bg-slate-800/70 backdrop-blur-md rounded-3xl p-8 border border-white/10 shadow-2xl">
-              <p className="text-3xl text-slate-300 font-medium mb-2">Paciente</p>
-              <p className="text-6xl font-bold text-white truncate mb-8">{getPatientName(currentCall.patientId)}</p>
-
-              <div className="flex items-center justify-center gap-4">
-                <span className="bg-primary/20 text-primary text-2xl px-6 py-2 rounded-full font-bold">
-                  Consultório
-                </span>
-                <span className="text-4xl font-bold text-slate-200">Dr(a). {getDoctorName(currentCall.doctorId)}</span>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="text-center">
-            <div className="text-6xl font-black text-slate-600">Aguardando Chamada</div>
-          </div>
-        )}
-      </main>
-
-      <aside className="tv-next relative z-10 w-[500px] bg-slate-950/95 border-l border-white/10 p-8 flex flex-col shadow-2xl backdrop-blur-md">
-        <div className="mb-8">
-          <span className="block text-3xl font-black text-white tracking-tight">
-            Últimas senhas chamadas
-          </span>
-          <small className="mt-2 block text-base font-semibold text-slate-400">
-            Aguarde sua chamada e confira o local de atendimento
-          </small>
-        </div>
-
-        <div className="space-y-4 flex-1">
-          {recentCalls.length === 0 ? (
-            <p className="text-slate-500 text-lg font-medium text-center py-10">Nenhuma senha chamada hoje</p>
+          {recentDisplay.length === 0 ? (
+            <div className="tv-empty-calls">Nenhuma senha chamada hoje</div>
           ) : (
-            recentCalls.map((appointment, index) => (
-              <div
-                key={appointment.id}
-                className="next-ticket bg-slate-900 border border-slate-800 rounded-2xl p-5 flex items-center gap-4"
-              >
-                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-xl font-black text-blue-200">
-                  {String(index + 1).padStart(2, '0')}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-3">
-                    <strong className="text-4xl font-black text-white tracking-tight">{appointment.queuePassword}</strong>
-                    <small className="rounded-full bg-white/10 px-3 py-1 text-xs font-black uppercase tracking-wide text-slate-300">
-                      {new Date(appointment.calledAt!).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                    </small>
-                  </div>
-                  <small className="mt-1 block truncate text-base font-semibold text-slate-400">
-                    {getCallLabel(appointment)}
-                  </small>
+            recentDisplay.map((call, index) => (
+              <div className="next-ticket" key={`${call.ticket}-${index}`}>
+                <span>{String(index + 1).padStart(2, '0')}</span>
+                <div>
+                  <strong>{call.ticket}</strong>
+                  <small>{call.service}</small>
                 </div>
-                <strong className="shrink-0 text-lg font-black text-yellow-300">
-                  {getCallLocation(appointment, index)}
-                </strong>
+                <strong>{call.location}</strong>
               </div>
             ))
           )}
-        </div>
-
-        <div className="pt-8 mt-auto border-t border-slate-800">
-          <div className="tv-orientation bg-slate-900 p-4 rounded-xl flex items-center gap-3 text-slate-300 font-semibold">
-            <Info className="w-5 h-5 shrink-0 text-blue-200" />
+          <div className="tv-orientation">
+            <Info size={20} />
             Mantenha seu documento e cartão SUS em mãos.
           </div>
-        </div>
-      </aside>
-    </div>
+        </aside>
+      </section>
+
+      <footer className="tv-footer">
+        <span>
+          <HeartPulse size={21} /> Cuidar de Olinda é conectar pessoas à saúde
+        </span>
+        <strong>Prefeitura Municipal de Olinda</strong>
+      </footer>
+    </main>
   );
 };

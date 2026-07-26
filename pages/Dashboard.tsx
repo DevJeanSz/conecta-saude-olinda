@@ -1,13 +1,27 @@
-import React, { useEffect, useState } from 'react';
-import { User, UserRole, Appointment, AppointmentStatus } from '../types';
+import React, { useEffect, useMemo, useState } from 'react';
+import type { LucideIcon } from 'lucide-react';
+import {
+  AlertCircle,
+  Building2,
+  Calendar,
+  CheckCircle2,
+  ChevronDown,
+  ClipboardCheck,
+  Clock3,
+  ShieldCheck,
+  Stethoscope,
+  TrendingDown,
+  TrendingUp,
+  Users,
+} from 'lucide-react';
+import { User, UserRole, AppointmentStatus } from '../types';
 import { api } from '../services/api';
-import { STATUS_LABELS } from '../constants';
-import { Calendar, Users, Building2, Stethoscope, ShieldCheck, Activity, UserPlus, Clock, BookHeart, CheckCircle, AlertCircle } from 'lucide-react';
-import { LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface DashboardProps {
   user: User;
 }
+
+type MetricTone = 'blue' | 'green' | 'red' | 'violet' | 'yellow' | 'orange' | 'cyan' | 'navy';
 
 export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const [stats, setStats] = useState({
@@ -21,15 +35,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     waitingList: 0,
     completedAppts: 0,
   });
-
-  const [lineData, setLineData] = useState<any[]>([]);
-  const [pieData, setPieData] = useState<any[]>([]);
+  const [lineData, setLineData] = useState<Array<{ name: string; value: number }>>([]);
   const [monthlyStats, setMonthlyStats] = useState({
     total: 0,
     completed: 0,
     cancelled: 0,
-    noShow: 0
+    noShow: 0,
   });
+  const [unitHighlights, setUnitHighlights] = useState<Array<{ name: string; count: number; progress: number }>>([]);
 
   useEffect(() => {
     const loadDashboardData = async () => {
@@ -39,211 +52,192 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       const patients = await api.patients.getAll();
       const appointments = await api.appointments.getAll();
       const today = new Date().toISOString().split('T')[0];
-      const todayAppts = appointments.filter(a => a.date === today);
+      const todayAppts = appointments.filter(appointment => appointment.date === today);
 
-      // Absenteeism
-      const pastAppointments = appointments.filter(a => new Date(a.date) < new Date(today) || (a.date === today && a.status === AppointmentStatus.NO_SHOW));
-      const noShows = pastAppointments.filter(a => a.status === AppointmentStatus.NO_SHOW).length;
+      const pastAppointments = appointments.filter(appointment => new Date(appointment.date) < new Date(today) || (appointment.date === today && appointment.status === AppointmentStatus.NO_SHOW));
+      const noShows = pastAppointments.filter(appointment => appointment.status === AppointmentStatus.NO_SHOW).length;
       const absenteeismValue = pastAppointments.length ? `${Math.round((noShows / pastAppointments.length) * 100)}%` : '0%';
 
-      // Average Wait Time
       let totalWaitMs = 0;
       let waitCount = 0;
-      appointments.forEach(a => {
-          if (a.checkInTime && a.calledAt) {
-               const checkIn = new Date(`2000-01-01T${a.checkInTime}`);
-               const called = new Date(`2000-01-01T${a.calledAt}`);
-               totalWaitMs += (called.getTime() - checkIn.getTime());
-               waitCount++;
-          }
+      appointments.forEach(appointment => {
+        if (appointment.checkInTime && appointment.calledAt) {
+          const checkIn = new Date(`2000-01-01T${appointment.checkInTime}`);
+          const called = new Date(`2000-01-01T${appointment.calledAt}`);
+          totalWaitMs += called.getTime() - checkIn.getTime();
+          waitCount++;
+        }
       });
       const avgWaitTimeValue = waitCount > 0 ? `${Math.round((totalWaitMs / waitCount) / 60000)} min` : '0 min';
-
-      // Fila de Espera
-      const waitingListValue = todayAppts.filter(a => a.checkInTime && !a.calledAt && a.status === AppointmentStatus.SCHEDULED).length;
+      const waitingListValue = todayAppts.filter(appointment => appointment.checkInTime && !appointment.calledAt && appointment.status === AppointmentStatus.SCHEDULED).length;
 
       setStats({
         totalPatients: patients.length,
-        totalProfessionals: users.filter(u => u.role === UserRole.DOCTOR).length,
+        totalProfessionals: users.filter(currentUser => currentUser.role === UserRole.DOCTOR).length,
         totalSpecialties: specs.length,
         totalUnits: units.length,
         todayAppointments: todayAppts.length,
-        completedAppts: todayAppts.filter(a => a.status === AppointmentStatus.COMPLETED).length,
+        completedAppts: todayAppts.filter(appointment => appointment.status === AppointmentStatus.COMPLETED).length,
         absenteeism: absenteeismValue,
         avgWaitTime: avgWaitTimeValue,
         waitingList: waitingListValue,
       });
 
-      // Charts Data
-      const monthPrefix = today.substring(0, 7); // YYYY-MM
-      const monthAppointments = appointments.filter(a => a.date.startsWith(monthPrefix));
-      
-      const appointmentsByDate = monthAppointments.reduce((acc: any, appt) => {
-          const day = appt.date.split('-')[2];
-          acc[day] = (acc[day] || 0) + 1;
-          return acc;
+      const monthPrefix = today.substring(0, 7);
+      const monthAppointments = appointments.filter(appointment => appointment.date.startsWith(monthPrefix));
+      const appointmentsByDate = monthAppointments.reduce<Record<string, number>>((acc, appointment) => {
+        const day = appointment.date.split('-')[2];
+        acc[day] = (acc[day] || 0) + 1;
+        return acc;
       }, {});
-      
+
       const lineDataRaw = Object.keys(appointmentsByDate).sort().map(day => ({
-          name: day,
-          value: appointmentsByDate[day]
+        name: day,
+        value: appointmentsByDate[day],
       }));
-      setLineData(lineDataRaw.length > 0 ? lineDataRaw : [{name: '01', value: 0}]);
+      setLineData(lineDataRaw.length > 0 ? lineDataRaw : [{ name: '01', value: 0 }]);
 
-      const pieCounts: Record<string, number> = {};
-      for (const appt of appointments) {
-          const doctor = users.find(u => u.id === appt.doctorId);
-          if (doctor && doctor.specialtyId) {
-              const spec = specs.find(s => s.id === doctor.specialtyId);
-              const specName = spec ? spec.name : 'Outras';
-              pieCounts[specName] = (pieCounts[specName] || 0) + 1;
-          } else {
-              pieCounts['Outras'] = (pieCounts['Outras'] || 0) + 1;
-          }
-      }
-
-      const colors = ['#1267D5', '#2BB24C', '#FFD21E', '#9333EA', '#06B6D4', '#94A3B8'];
-      const pieDataRaw = Object.entries(pieCounts).map(([name, value], idx) => ({
-          name,
-          value: value as number,
-          color: colors[idx % colors.length]
-      })).sort((a, b) => b.value - a.value);
-      setPieData(pieDataRaw);
+      const maxUnitCount = Math.max(1, ...units.map(unit => todayAppts.filter(appointment => appointment.unitId === unit.id).length));
+      setUnitHighlights(
+        units.slice(0, 4).map(unit => {
+          const count = todayAppts.filter(appointment => appointment.unitId === unit.id).length;
+          return {
+            name: unit.name,
+            count,
+            progress: Math.max(8, Math.round((count / maxUnitCount) * 100)),
+          };
+        }),
+      );
 
       setMonthlyStats({
-          total: monthAppointments.length,
-          completed: monthAppointments.filter(a => a.status === AppointmentStatus.COMPLETED).length,
-          cancelled: monthAppointments.filter(a => a.status === AppointmentStatus.CANCELLED).length,
-          noShow: monthAppointments.filter(a => a.status === AppointmentStatus.NO_SHOW).length
+        total: monthAppointments.length,
+        completed: monthAppointments.filter(appointment => appointment.status === AppointmentStatus.COMPLETED).length,
+        cancelled: monthAppointments.filter(appointment => appointment.status === AppointmentStatus.CANCELLED).length,
+        noShow: monthAppointments.filter(appointment => appointment.status === AppointmentStatus.NO_SHOW).length,
       });
     };
 
     loadDashboardData();
   }, [user]);
 
-  const StatCard = ({ title, value, icon: Icon, color, trend }: any) => (
-    <div className="bg-white dark:bg-slate-950 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col justify-between transition-colors">
-      <div className="flex justify-between items-start mb-4">
-        <div className={`p-3 rounded-xl bg-slate-50 dark:bg-slate-900 text-${color}-600 dark:text-${color}-400`}>
-          <Icon className={`w-6 h-6 text-primary`} />
-        </div>
-        <span className="text-xl font-black text-slate-800 dark:text-slate-100">{value}</span>
-      </div>
-      <div>
-        <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{title}</p>
-        {trend && (
-          <p className="text-xs font-semibold text-secondary dark:text-emerald-400 mt-1 flex items-center gap-1">
-              <span className="text-lg leading-none">↑</span> {trend}
-          </p>
-        )}
-      </div>
-    </div>
-  );
+  const metrics = useMemo<Array<{ label: string; value: string | number; meta: string; icon: LucideIcon; tone: MetricTone; trend: 'up' | 'down' }>>(() => [
+    { label: 'Consultas do Dia', value: stats.todayAppointments, meta: 'Agenda atualizada', icon: Calendar, tone: 'blue', trend: 'up' },
+    { label: 'Consultas Realizadas', value: stats.completedAppts, meta: 'Concluídas hoje', icon: CheckCircle2, tone: 'green', trend: 'up' },
+    { label: 'Taxa de Absenteísmo', value: stats.absenteeism, meta: 'Acompanhar faltas', icon: AlertCircle, tone: 'red', trend: 'down' },
+    { label: 'Pacientes Ativos', value: stats.totalPatients, meta: 'Cadastros da rede', icon: Users, tone: 'violet', trend: 'up' },
+    { label: 'Tempo Médio de Espera', value: stats.avgWaitTime, meta: 'Meta: até 20 min', icon: Clock3, tone: 'yellow', trend: 'up' },
+    { label: 'Fila de Espera', value: stats.waitingList, meta: 'Em atendimento', icon: ClipboardCheck, tone: 'orange', trend: 'up' },
+    { label: 'Profissionais Ativos', value: stats.totalProfessionals, meta: 'Equipe médica', icon: Stethoscope, tone: 'cyan', trend: 'up' },
+    { label: 'Unidades de Saúde', value: stats.totalUnits, meta: 'Rede municipal', icon: Building2, tone: 'navy', trend: 'up' },
+  ], [stats]);
+
+  const maxChartValue = Math.max(1, ...lineData.map(item => item.value));
 
   return (
-    <div className="space-y-6 pb-12">
-      {/* Banner de Boas Vindas */}
-      <div className="bg-primary-dark rounded-2xl p-8 text-white relative overflow-hidden shadow-lg">
-          <div className="relative z-10 w-2/3">
-              <div className="flex items-center gap-3 mb-2">
-                 <ShieldCheck className="w-8 h-8 text-secondary" />
-                 <h2 className="text-2xl font-bold">Bem-vindo, {user.name.split(' ')[0]}!</h2>
-              </div>
-              <p className="text-blue-100 mt-2 font-medium">Você tem controle total sobre as unidades de saúde, equipe e especialidades da rede municipal. Utilize os indicadores abaixo para acompanhar e tomar decisões estratégicas.</p>
-          </div>
-          {/* Decoração de fundo */}
-          <div className="absolute right-0 bottom-0 opacity-20 pointer-events-none">
-              <Building2 className="w-64 h-64 -mb-10 -mr-10 text-white" />
-          </div>
-      </div>
-
-      {/* Cards de Métricas Principais */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard title="Consultas do Dia" value={stats.todayAppointments} icon={Calendar} color="primary" />
-        <StatCard title="Consultas Realizadas" value={stats.completedAppts} icon={CheckCircle} color="secondary" />
-        <StatCard title="Taxa de Absenteísmo" value={stats.absenteeism} icon={AlertCircle} color="red" />
-        <StatCard title="Pacientes Ativos" value={stats.totalPatients} icon={Users} color="primary" />
-        
-        <StatCard title="Tempo Méd. Espera" value={stats.avgWaitTime} icon={Clock} color="orange" />
-        <StatCard title="Fila de Espera" value={stats.waitingList} icon={Users} color="blue" />
-        <StatCard title="Profissionais Ativos" value={stats.totalProfessionals} icon={Stethoscope} color="primary" />
-        <StatCard title="Unidades de Saúde" value={stats.totalUnits} icon={Building2} color="primary" />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Gráfico de Linha */}
-        <div className="lg:col-span-2 bg-white dark:bg-slate-950 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 transition-colors">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">Agendamentos do mês <span className="text-slate-400 dark:text-slate-500 font-normal text-sm">ⓘ</span></h3>
-            <div className="flex gap-2">
-                <select className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm p-1 rounded font-medium text-slate-600 dark:text-slate-300"><option>Maio/2025</option></select>
-                <select className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm p-1 rounded font-medium text-slate-600 dark:text-slate-300"><option>Mensal</option></select>
-            </div>
-          </div>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={lineData} margin={{ top: 5, right: 0, left: -20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" opacity={0.3} />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
-                <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#f8fafc' }} />
-                <Line type="monotone" dataKey="value" stroke="#1267D5" strokeWidth={3} dot={{r: 4, fill: '#1267D5', strokeWidth: 2, stroke: 'white'}} activeDot={{r: 6}} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="flex justify-between items-center mt-4 pt-4 border-t border-slate-50 dark:border-slate-800">
-              <div className="flex flex-col"><span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Total no mês</span><span className="text-xl font-black text-slate-800 dark:text-slate-100">{monthlyStats.total}</span></div>
-              <div className="flex flex-col items-center"><span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider flex items-center gap-1"><CheckCircle className="w-3 h-3 text-secondary"/> Realizados</span><span className="text-xl font-black text-slate-800 dark:text-slate-100">{monthlyStats.completed}</span></div>
-              <div className="flex flex-col items-center"><span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider flex items-center gap-1"><AlertCircle className="w-3 h-3 text-ita-red"/> Cancelados</span><span className="text-xl font-black text-slate-800 dark:text-slate-100">{monthlyStats.cancelled}</span></div>
-              <div className="flex flex-col items-end"><span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider flex items-center gap-1"><UserPlus className="w-3 h-3 text-ita-yellow"/> Faltas</span><span className="text-xl font-black text-slate-800 dark:text-slate-100">{monthlyStats.noShow}</span></div>
+    <div className="dashboard-content">
+      <section className="dashboard-intro">
+        <div>
+          <span>Visão da rede</span>
+          <h2>Bom dia, {user.name.split(' ')[0]}!</h2>
+          <p>
+            Acompanhe atendimentos, filas, unidades, profissionais e
+            indicadores da rede municipal de Olinda.
+          </p>
+        </div>
+        <div className="system-status">
+          <span />
+          <div>
+            <strong>Sistema operacional</strong>
+            <small>Todas as unidades sincronizadas</small>
           </div>
         </div>
+      </section>
 
-        {/* Gráfico de Pizza */}
-        <div className="bg-white dark:bg-slate-950 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col transition-colors">
-          <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2">Distribuição por especialidade <span className="text-slate-400 dark:text-slate-500 font-normal text-sm">ⓘ</span></h3>
-          <div className="h-48 relative flex justify-center items-center">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={pieData} innerRadius={60} outerRadius={80} paddingAngle={2} dataKey="value" stroke="none">
-                  {pieData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#f8fafc' }} />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="absolute flex flex-col items-center justify-center pointer-events-none">
-                <span className="text-xs font-bold text-slate-400 dark:text-slate-500">Total</span>
-                <span className="text-lg font-black text-slate-800 dark:text-slate-100">{stats.totalSpecialties > 0 ? Object.values(pieData).reduce((sum, item) => sum + item.value, 0) : 0}</span>
+      <section className="metric-grid">
+        {metrics.map(({ label, value, meta, icon: Icon, tone, trend }) => (
+          <article className="metric-card" key={label}>
+            <span className={`metric-icon ${tone}`}>
+              <Icon size={21} />
+            </span>
+            <div>
+              <small>{label}</small>
+              <strong>{value}</strong>
+              <span className={trend}>
+                {trend === 'up' ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                {meta}
+              </span>
             </div>
+          </article>
+        ))}
+      </section>
+
+      <section className="dashboard-lower-grid">
+        <article className="chart-card">
+          <div className="card-header">
+            <div>
+              <h3>Atendimentos do mês</h3>
+              <p>Consultas agendadas e realizadas</p>
+            </div>
+            <button type="button">
+              Mês atual <ChevronDown size={16} />
+            </button>
           </div>
-          <div className="mt-auto space-y-2">
-              {pieData.map((item, idx) => (
-                  <div key={idx} className="flex justify-between items-center text-sm">
-                      <div className="flex items-center gap-2">
-                          <div className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: item.color}}></div>
-                          <span className="font-semibold text-slate-700 dark:text-slate-300">{item.name}</span>
-                      </div>
-                      <div className="flex gap-4 w-24 justify-end">
-                          <span className="font-bold text-slate-800 dark:text-slate-100">{item.value}</span>
-                          <span className="text-slate-400 dark:text-slate-500 w-8 text-right">{Object.values(pieData).reduce((sum, i) => sum + i.value, 0) > 0 ? Math.round((item.value/Object.values(pieData).reduce((sum, i) => sum + i.value, 0))*100) : 0}%</span>
-                      </div>
+          <div className="chart-legend">
+            <span className="legend-blue">Agendadas</span>
+            <span className="legend-green">Realizadas</span>
+          </div>
+          <div className="bar-chart" aria-label="Gráfico de atendimentos">
+            {lineData.slice(-7).map((item, index) => {
+              const height = Math.max(8, Math.round((item.value / maxChartValue) * 100));
+              return (
+                <div className="bar-group" key={`${item.name}-${index}`}>
+                  <div>
+                    <i style={{ height: `${height}%` }} />
+                    <i style={{ height: `${Math.max(5, height - 13)}%` }} />
                   </div>
-              ))}
+                  <span>{item.name}</span>
+                </div>
+              );
+            })}
           </div>
-          <button className="text-primary font-bold text-sm text-center mt-4 w-full hover:underline">Ver todas as especialidades →</button>
+        </article>
+
+        <article className="units-card">
+          <div className="card-header">
+            <div>
+              <h3>Unidades em destaque</h3>
+              <p>Volume de atendimentos hoje</p>
+            </div>
+          </div>
+          {(unitHighlights.length ? unitHighlights : [{ name: 'Rede municipal', count: 0, progress: 8 }]).map(unit => (
+            <div className="unit-progress" key={unit.name}>
+              <div>
+                <strong>{unit.name}</strong>
+                <small>{unit.count} atendimentos</small>
+              </div>
+              <span>
+                <i style={{ width: `${unit.progress}%` }} />
+              </span>
+            </div>
+          ))}
+        </article>
+      </section>
+
+      <section className="admin-data-card dashboard-summary-card">
+        <div className="card-header">
+          <div>
+            <h3>Resumo mensal</h3>
+            <p>Produção consolidada do mês atual.</p>
+          </div>
+          <ShieldCheck size={24} />
         </div>
-
-      </div>
-
-      {/* Atividades Recentes removidas conforme solicitado para uso de dados reais em breve */}
-      
-      {/* Rodapé da imagem */}
-      <div className="pt-8 text-center flex items-center justify-center gap-2 text-slate-400 text-xs font-medium border-t border-slate-200 mt-8">
-          Conecta Saúde Olinda - Sistema de Gestão em Saúde <span className="text-primary px-2">|</span> <BookHeart className="w-4 h-4 text-primary" /> Tecnologia conectando pessoas e cuidando de vidas!
-      </div>
+        <div className="dashboard-summary-grid">
+          <strong>{monthlyStats.total}<span>Total</span></strong>
+          <strong>{monthlyStats.completed}<span>Realizadas</span></strong>
+          <strong>{monthlyStats.cancelled}<span>Canceladas</span></strong>
+          <strong>{monthlyStats.noShow}<span>Faltas</span></strong>
+        </div>
+      </section>
     </div>
   );
 };

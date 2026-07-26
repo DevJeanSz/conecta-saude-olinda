@@ -4,29 +4,30 @@ import { api } from '../services/api';
 import { HealthUnit } from '../types';
 import {
   ArrowLeft,
+  BadgeCheck,
   Building2,
-  CalendarDays,
   Check,
   ChevronLeft,
   ChevronRight,
-  CreditCard,
-  Home,
+  Info,
   Loader2,
-  Lock,
-  Mail,
-  MapPin,
-  Phone,
-  ShieldCheck,
-  User as UserIcon,
-  UserPlus,
 } from 'lucide-react';
-import prefeituraLogo from '@/src/assets/images/prefeitura-olinda-oficial.svg';
 import { BrandLockup } from '../components/BrandLockup';
+import { PernambucoStripe } from '../components/VisualPrimitives';
 
-const steps = [
-  { title: 'Dados', description: 'Identificação do paciente' },
-  { title: 'Endereço', description: 'Local de residência' },
-  { title: 'Unidade', description: 'Referência de atendimento' },
+const registerStepContent = [
+  {
+    title: 'Seus dados pessoais',
+    subtitle: 'Preencha as informações exatamente como estão nos documentos.',
+  },
+  {
+    title: 'Onde você mora',
+    subtitle: 'Usaremos seu endereço para encontrar a unidade mais próxima.',
+  },
+  {
+    title: 'Sua unidade de referência',
+    subtitle: 'Confirme a unidade básica que acompanhará o seu cuidado.',
+  },
 ];
 
 export const Register: React.FC = () => {
@@ -67,9 +68,6 @@ export const Register: React.FC = () => {
       })
       .catch(() => setUnits([]));
   }, []);
-
-  const inputClass = 'w-full h-10 px-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none bg-white text-sm text-slate-900 placeholder-slate-400 font-semibold';
-  const labelClass = 'block text-xs font-black text-slate-700 mb-1';
 
   const isValidCPF = (cpf: string) => {
     cpf = cpf.replace(/[^\d]+/g, '');
@@ -200,7 +198,7 @@ export const Register: React.FC = () => {
 
   const goNext = () => {
     if (!validateStep(currentStep)) return;
-    setCurrentStep(step => Math.min(step + 1, steps.length - 1));
+    setCurrentStep(step => Math.min(step + 1, registerStepContent.length - 1));
   };
 
   const goBack = () => {
@@ -251,287 +249,188 @@ export const Register: React.FC = () => {
   };
 
   return (
-    <div className="h-screen overflow-hidden bg-[#F4F8FC] text-slate-900 font-sans flex flex-col">
-      <header className="shrink-0 bg-white border-b border-slate-200">
-        <div className="max-w-6xl mx-auto h-16 sm:h-20 px-4 sm:px-6 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <img src={prefeituraLogo} alt="Prefeitura de Olinda" className="h-8 sm:h-11 w-auto object-contain shrink-0" />
-            <div className="h-10 w-px bg-slate-200" />
-            <BrandLockup compact />
-          </div>
-
-          <Link to="/login" className="hidden sm:flex items-center gap-2 rounded-lg bg-blue-50 border border-blue-100 px-3 py-2 text-primary font-black text-sm">
-            <ArrowLeft className="w-4 h-4" />
-            Fazer login
-          </Link>
+    <main className="register-page">
+      <PernambucoStripe />
+      <header className="simple-header">
+        <Link to="/">
+          <BrandLockup />
+        </Link>
+        <div>
+          Já possui cadastro?
+          <Link to="/login">Entrar</Link>
         </div>
       </header>
 
-      <main className="flex-1 min-h-0 px-4 sm:px-6 py-2 sm:py-4 lg:py-6">
-        <div className="max-w-6xl mx-auto h-full grid lg:grid-cols-[minmax(360px,520px)_1fr] gap-6 items-center">
-          <section className="bg-white border border-slate-200 rounded-2xl shadow-xl shadow-blue-900/5 p-3 sm:p-6 w-full max-w-xl mx-auto">
-            <div className="text-center">
-              <h1 className="text-2xl sm:text-3xl font-black text-slate-950">Crie sua conta</h1>
-              <p className="text-primary text-base sm:text-lg font-bold mt-1">Portal do Paciente</p>
+      <section className="register-shell">
+        <div className="register-heading">
+          <Link to="/login">
+            <ArrowLeft size={18} /> Voltar para o login
+          </Link>
+          <span>Cadastro gratuito</span>
+          <h1>Cadastro do paciente</h1>
+          <p>Leva poucos minutos e aproxima você dos serviços de saúde.</p>
+        </div>
+
+        <ol className="stepper" aria-label="Etapas do cadastro">
+          {['Dados', 'Endereço', 'Unidade'].map((label, index) => (
+            <li className={index <= currentStep ? 'active' : ''} key={label}>
+              <span>{index < currentStep ? <Check size={16} /> : index + 1}</span>
+              <strong>{label}</strong>
+            </li>
+          ))}
+        </ol>
+
+        <form className="register-card" onSubmit={handleSubmit}>
+          <div className="register-card-heading">
+            <span>{currentStep + 1} de 3</span>
+            <h2>{registerStepContent[currentStep].title}</h2>
+            <p>{registerStepContent[currentStep].subtitle}</p>
+          </div>
+
+          {currentStep === 0 && (
+            <div className="form-grid">
+              <label className="field-full">
+                Nome completo
+                <input
+                  onChange={e => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="Como aparece no seu documento"
+                  required
+                  value={formData.name}
+                />
+              </label>
+              <label>
+                CPF
+                <input inputMode="numeric" maxLength={14} onChange={handleCpfChange} placeholder="000.000.000-00" required value={formData.cpf} />
+              </label>
+              <label>
+                Cartão SUS
+                <input inputMode="numeric" onChange={e => setFormData({ ...formData, susNumber: e.target.value })} placeholder="000 0000 0000 0000" required value={formData.susNumber} />
+              </label>
+              <label>
+                Data de nascimento
+                <input onChange={e => setFormData({ ...formData, birthDate: e.target.value })} required type="date" value={formData.birthDate} />
+              </label>
+              <label>
+                Telefone celular
+                <input inputMode="tel" maxLength={15} onChange={handlePhoneChange} placeholder="(81) 90000-0000" required value={formData.phone} />
+              </label>
+              <label className="field-full">
+                E-mail
+                <input onChange={e => setFormData({ ...formData, email: e.target.value })} placeholder="email@exemplo.com" required type="email" value={formData.email} />
+              </label>
             </div>
+          )}
 
-            <div className="mt-4 grid grid-cols-3 gap-2">
-              {steps.map((step, index) => (
-                <button
-                  key={step.title}
-                  type="button"
-                  onClick={() => index < currentStep && setCurrentStep(index)}
-                  className={`rounded-lg border px-2 py-2 text-left transition-colors ${
-                    index === currentStep
-                      ? 'border-primary bg-blue-50 text-primary'
-                      : index < currentStep
-                        ? 'border-green-200 bg-green-50 text-green-700'
-                        : 'border-slate-200 bg-slate-50 text-slate-500'
-                  }`}
-                >
-                  <div className="flex items-center gap-1.5">
-                    <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-black ${
-                      index < currentStep ? 'bg-green-600 text-white' : index === currentStep ? 'bg-primary text-white' : 'bg-slate-200 text-slate-500'
-                    }`}>
-                      {index < currentStep ? <Check className="w-3 h-3" /> : index + 1}
-                    </span>
-                    <span className="text-xs font-black">{step.title}</span>
-                  </div>
-                  <p className="hidden sm:block text-[11px] font-semibold mt-1 opacity-80">{step.description}</p>
-                </button>
-              ))}
+          {currentStep === 1 && (
+            <div className="form-grid">
+              <label>
+                CEP
+                <input inputMode="numeric" maxLength={9} onChange={handleCepChange} placeholder="00000-000" required value={formData.cep} />
+              </label>
+              <label>
+                Bairro
+                <input onChange={e => updateAddressDetails('neighborhood', e.target.value)} placeholder="Bairro" required value={addressDetails.neighborhood} />
+              </label>
+              <label className="field-full">
+                Endereço
+                <input onChange={e => updateAddressDetails('street', e.target.value)} placeholder="Rua ou avenida" required value={addressDetails.street} />
+              </label>
+              <label>
+                Número
+                <input onChange={e => updateAddressDetails('number', e.target.value)} placeholder="Ex.: 120" required value={addressDetails.number} />
+              </label>
+              <label>
+                Complemento
+                <input onChange={e => updateAddressDetails('complement', e.target.value)} placeholder="Casa, apto. (opcional)" value={addressDetails.complement} />
+              </label>
+              <label>
+                Cidade
+                <input onChange={e => updateAddressDetails('city', e.target.value)} placeholder="Olinda" required value={addressDetails.city} />
+              </label>
+              <label>
+                UF
+                <input maxLength={2} onChange={e => updateAddressDetails('state', e.target.value.toUpperCase())} placeholder="PE" required value={addressDetails.state} />
+              </label>
             </div>
+          )}
 
-            <form onSubmit={handleSubmit} className="mt-4">
-              {currentStep === 0 && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="col-span-2">
-                    <label className={labelClass}>Nome completo</label>
-                    <div className="relative">
-                      <UserIcon className="absolute left-3 top-2.5 w-5 h-5 text-slate-400" />
-                      <input className={`${inputClass} pl-10`} value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="Nome do paciente" required />
-                    </div>
+          {currentStep === 2 && (
+            <>
+              <div className="form-grid register-rg-grid">
+                <label className="field-full">
+                  RG opcional
+                  <input maxLength={12} onChange={handleRgChange} placeholder="00.000.000-0" value={formData.rg} />
+                </label>
+              </div>
+
+              <div className="unit-options">
+                {units.length === 0 ? (
+                  <div className="selection-note">
+                    <Info size={17} />
+                    Nenhuma unidade disponível no momento. Tente novamente mais tarde.
                   </div>
-
-                  <div>
-                    <label className={labelClass}>CPF</label>
-                    <input className={inputClass} value={formData.cpf} onChange={handleCpfChange} placeholder="000.000.000-00" maxLength={14} required />
-                  </div>
-
-                  <div>
-                    <label className={labelClass}>Nascimento</label>
-                    <div className="relative">
-                      <CalendarDays className="absolute left-3 top-2.5 w-5 h-5 text-slate-400" />
-                      <input type="date" className={`${inputClass} pl-10`} value={formData.birthDate} onChange={e => setFormData({ ...formData, birthDate: e.target.value })} required />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className={labelClass}>Telefone</label>
-                    <div className="relative">
-                      <Phone className="absolute left-3 top-2.5 w-5 h-5 text-slate-400" />
-                      <input type="tel" className={`${inputClass} pl-10`} value={formData.phone} onChange={handlePhoneChange} placeholder="(00) 00000-0000" maxLength={15} required />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className={labelClass}>Cartão SUS</label>
-                    <div className="relative">
-                      <CreditCard className="absolute left-3 top-2.5 w-5 h-5 text-slate-400" />
-                      <input className={`${inputClass} pl-10`} value={formData.susNumber} onChange={e => setFormData({ ...formData, susNumber: e.target.value })} placeholder="Número SUS" required />
-                    </div>
-                  </div>
-
-                  <div className="col-span-2">
-                    <label className={labelClass}>E-mail</label>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-2.5 w-5 h-5 text-slate-400" />
-                      <input type="email" className={`${inputClass} pl-10`} value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} placeholder="email@exemplo.com" required />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {currentStep === 1 && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className={labelClass}>CEP</label>
-                    <input className={inputClass} value={formData.cep} onChange={handleCepChange} placeholder="00000-000" maxLength={9} required />
-                  </div>
-
-                  <div>
-                    <label className={labelClass}>Número</label>
-                    <input className={inputClass} value={addressDetails.number} onChange={e => updateAddressDetails('number', e.target.value)} placeholder="Nº ou S/N" required />
-                  </div>
-
-                  <div className="col-span-2">
-                    <label className={labelClass}>Logradouro</label>
-                    <div className="relative">
-                      <Home className="absolute left-3 top-2.5 w-5 h-5 text-slate-400" />
-                      <input className={`${inputClass} pl-10`} value={addressDetails.street} onChange={e => updateAddressDetails('street', e.target.value)} placeholder="Rua, avenida ou travessa" required />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className={labelClass}>Bairro</label>
-                    <input className={inputClass} value={addressDetails.neighborhood} onChange={e => updateAddressDetails('neighborhood', e.target.value)} placeholder="Bairro" required />
-                  </div>
-
-                  <div className="grid grid-cols-[1fr_72px] gap-2">
-                    <div>
-                      <label className={labelClass}>Cidade</label>
-                      <input className={inputClass} value={addressDetails.city} onChange={e => updateAddressDetails('city', e.target.value)} placeholder="Cidade" required />
-                    </div>
-                    <div>
-                      <label className={labelClass}>UF</label>
-                      <input className={inputClass} value={addressDetails.state} onChange={e => updateAddressDetails('state', e.target.value.toUpperCase())} placeholder="PE" maxLength={2} required />
-                    </div>
-                  </div>
-
-                  <div className="col-span-2">
-                    <label className={labelClass}>Complemento opcional</label>
-                    <input className={inputClass} value={addressDetails.complement} onChange={e => updateAddressDetails('complement', e.target.value)} placeholder="Apto, bloco, ponto de referência" />
-                  </div>
-                </div>
-              )}
-
-              {currentStep === 2 && (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className={labelClass}>RG opcional</label>
-                      <input className={inputClass} value={formData.rg} onChange={handleRgChange} placeholder="00.000.000-0" maxLength={12} />
-                    </div>
-                    <div>
-                      <label className={labelClass}>Unidade</label>
-                      <select className={inputClass} value={formData.unitId} onChange={e => setFormData({ ...formData, unitId: e.target.value })} required>
-                        <option value="">{units.length ? 'Selecione' : 'Indisponível'}</option>
-                        {units.map(unit => (
-                          <option key={unit.id} value={unit.id}>{unit.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 flex gap-3">
-                    <Lock className="w-6 h-6 text-primary shrink-0 mt-0.5" />
-                    <div>
-                      <h2 className="font-black text-primary">Cadastro seguro e gratuito</h2>
-                      <p className="text-sm text-slate-600 mt-1">
-                        Após concluir, sua conta ficará vinculada à unidade escolhida para acesso ao portal do paciente.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="text-xs font-black uppercase text-slate-500">Resumo</p>
-                    <p className="mt-1 font-black text-slate-900 truncate">{formData.name || 'Nome do paciente'}</p>
-                    <p className="text-sm text-slate-600 truncate">{formData.email || 'E-mail não informado'}</p>
-                  </div>
-                </div>
-              )}
-
-              {error && (
-                <div className="mt-3 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm font-semibold text-red-600">
-                  {error}
-                </div>
-              )}
-
-              <div className="mt-4 flex items-center justify-between gap-3">
-                {currentStep > 0 ? (
-                  <button
-                    type="button"
-                    onClick={goBack}
-                    className="h-11 px-4 rounded-lg border border-slate-300 text-slate-700 font-black flex items-center gap-2 hover:bg-slate-50"
-                  >
-                    <ChevronLeft className="w-5 h-5" />
-                    Voltar
-                  </button>
                 ) : (
-                  <Link to="/login" className="h-11 px-4 rounded-lg border border-slate-300 text-slate-700 font-black flex items-center gap-2 hover:bg-slate-50">
-                    <ArrowLeft className="w-5 h-5" />
-                    Login
-                  </Link>
+                  units.map((unit, index) => (
+                    <label key={unit.id}>
+                      <input
+                        checked={formData.unitId === unit.id}
+                        name="unit"
+                        onChange={() => setFormData({ ...formData, unitId: unit.id })}
+                        type="radio"
+                      />
+                      <span className="unit-radio" />
+                      <span className="unit-icon">
+                        <Building2 size={21} />
+                      </span>
+                      <span>
+                        <strong>{unit.name}</strong>
+                        <small>{unit.address || 'Unidade municipal de referência'}</small>
+                      </span>
+                      {index === 0 && <BadgeCheck className="recommended-icon" size={20} />}
+                    </label>
+                  ))
                 )}
-
-                {currentStep < steps.length - 1 ? (
-                  <button
-                    type="button"
-                    onClick={goNext}
-                    className="h-11 px-5 rounded-lg bg-primary hover:bg-primary-dark text-white font-black flex items-center gap-2"
-                  >
-                    Continuar
-                    <ChevronRight className="w-5 h-5" />
-                  </button>
-                ) : (
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="h-11 px-5 rounded-lg bg-primary hover:bg-primary-dark text-white font-black flex items-center gap-2 disabled:opacity-60"
-                  >
-                    {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <UserPlus className="w-5 h-5" />}
-                    Criar conta
-                  </button>
-                )}
-              </div>
-            </form>
-          </section>
-
-          <aside className="hidden lg:block">
-            <div className="border-l border-slate-200 pl-10">
-              <p className="text-3xl font-black text-primary leading-tight">Cadastro rápido para o cidadão.</p>
-              <p className="text-3xl font-black text-green-700 leading-tight">Acesso mais simples à saúde.</p>
-
-              <div className="mt-8 space-y-5">
-                <div className="flex gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-blue-50 text-primary flex items-center justify-center shrink-0">
-                    <UserIcon className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h2 className="font-black text-slate-900">Identificação do paciente</h2>
-                    <p className="text-sm text-slate-600 mt-1 max-w-sm">Dados básicos para localizar sua conta com segurança.</p>
-                  </div>
-                </div>
-                <div className="flex gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-green-50 text-green-700 flex items-center justify-center shrink-0">
-                    <MapPin className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h2 className="font-black text-slate-900">Endereço de referência</h2>
-                    <p className="text-sm text-slate-600 mt-1 max-w-sm">Informações para orientar o vínculo com a rede municipal.</p>
-                  </div>
-                </div>
-                <div className="flex gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-                    <Building2 className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h2 className="font-black text-slate-900">Unidade de saúde</h2>
-                    <p className="text-sm text-slate-600 mt-1 max-w-sm">Escolha onde seu cadastro ficará vinculado para atendimentos.</p>
-                  </div>
+                <div className="selection-note">
+                  <Info size={17} />
+                  A unidade será vinculada ao seu cadastro para facilitar agendamentos e atendimentos.
                 </div>
               </div>
+            </>
+          )}
 
-              <div className="mt-8 rounded-xl border border-blue-100 bg-white px-5 py-4 flex gap-3 items-center text-primary">
-                <ShieldCheck className="w-7 h-7 shrink-0" />
-                <p className="text-sm font-bold">Seus dados são protegidos conforme a Lei Geral de Proteção de Dados.</p>
-              </div>
+          {error && (
+            <div className="auth-error register-error" role="alert">
+              {error}
             </div>
-          </aside>
-        </div>
-      </main>
+          )}
 
-      <footer className="shrink-0 bg-white border-t border-slate-200">
-        <div className="h-2 flex">
-          <div className="flex-1 bg-primary" />
-          <div className="flex-1 bg-green-500" />
-          <div className="flex-1 bg-yellow-400" />
-          <div className="flex-1 bg-red-500" />
-        </div>
-        <div className="h-8 sm:h-10 px-4 flex items-center justify-center text-center text-[10px] sm:text-[11px] font-semibold text-slate-500">
-          Prefeitura Municipal de Olinda. Cadastro gratuito no Conecta Saúde.
-        </div>
+          <div className="register-actions">
+            <button
+              className="button button-secondary"
+              disabled={currentStep === 0}
+              onClick={goBack}
+              type="button"
+            >
+              <ChevronLeft size={18} /> Voltar
+            </button>
+            {currentStep < registerStepContent.length - 1 ? (
+              <button className="button button-primary" onClick={goNext} type="button">
+                Continuar
+                <ChevronRight size={18} />
+              </button>
+            ) : (
+              <button className="button button-primary" disabled={loading} type="submit">
+                {loading ? 'Criando conta' : 'Concluir cadastro'}
+                {loading ? <Loader2 className="loading-spin" size={18} /> : <Check size={18} />}
+              </button>
+            )}
+          </div>
+        </form>
+      </section>
+
+      <footer className="register-footer">
+        Prefeitura Municipal de Olinda. Cadastro gratuito no Conecta Saúde.
       </footer>
-    </div>
+    </main>
   );
 };

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { PatientLayout } from './components/PatientLayout';
+import { PrototypeNavigator } from './components/PrototypeNavigator';
 import { Dashboard } from './pages/Dashboard';
 import { DisplayTV } from './pages/DisplayTV';
 import { LandingPage } from './pages/LandingPage';
@@ -284,6 +285,7 @@ const App: React.FC = () => {
         <Route path="/tv" element={<Navigate to="/display-tv" replace />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
+      <PrototypeNavigator />
     </BrowserRouter>
   );
 };
