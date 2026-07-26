@@ -13,9 +13,9 @@ import {
   User as UserIcon,
   UserPlus,
 } from 'lucide-react';
-import logo from '@/src/assets/images/conectasaudeolinda.png';
 import prefeituraLogo from '@/src/assets/images/prefeitura-olinda.png';
 import olindaOrla from '@/src/assets/images/olinda-orla.png';
+import { BrandLockup } from '../components/BrandLockup';
 
 interface LoginProps {
   onLogin: (user: User) => void;
@@ -95,12 +95,12 @@ export const Login: React.FC<LoginProps> = ({ onLogin, initialMode = 'PATIENT', 
           <div className="flex items-center gap-2 sm:gap-4 min-w-0">
             <img src={prefeituraLogo} alt="Prefeitura de Olinda" className="h-8 sm:h-11 w-auto object-contain shrink-0" />
             <div className="hidden sm:block h-10 w-px bg-slate-200" />
-            <img src={logo} alt="Conecta Saúde Olinda" className="h-10 sm:h-14 w-auto object-contain shrink-0" />
+            <BrandLockup compact />
           </div>
 
           <nav className="hidden md:flex items-center gap-6 text-sm font-bold text-slate-600">
             <Link to="/" className="text-primary">Início</Link>
-            <Link to="/cadastro" className="hover:text-primary transition-colors">Cadastro</Link>
+            <Link to="/register" className="hover:text-primary transition-colors">Cadastro</Link>
           </nav>
 
           <div className="hidden sm:flex items-center gap-2 rounded-lg bg-yellow-400 px-4 py-2 text-slate-950 font-black">
@@ -258,7 +258,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin, initialMode = 'PATIENT', 
                 <div className="mt-3 text-center text-sm">
                   {mode === 'PATIENT' ? (
                     <Link
-                      to="/cadastro"
+                      to="/register"
                       className="h-10 border border-green-600 text-green-700 rounded-lg font-black hover:bg-green-50 flex items-center justify-center gap-2"
                     >
                       <UserPlus className="w-4 h-4" />

@@ -1,4 +1,4 @@
-import { User, Patient, Appointment, HealthUnit, Specialty, Notification } from '../types';
+import { User, Patient, Appointment, HealthUnit, Specialty, Notification, Exam, CareHistoryItem, ReminderPreference } from '../types';
 
 const SESSION_USER_KEY = 'health_user';
 const ACCESS_TOKEN_KEY = 'auth_token';
@@ -210,7 +210,7 @@ export const api = {
     getByUnit: async (unitId: string) => request<Patient[]>('/patients', {}, { unitId })
       .catch(() => []),
     getByUserId: async (userId: string) => {
-      const patients = await request<Patient[]>('/patients', {}, { userId });
+      const patients = await request<Patient[]>('/patients', {}, { userId }).catch(() => []);
       return patients[0] ?? null;
     },
     add: (patient: Omit<Patient, 'id'>) => request<Patient>('/patients', { method: 'POST', body: JSON.stringify(patient) }),
@@ -218,11 +218,29 @@ export const api = {
     delete: (id: string) => request<void>(`/patients/${pathId(id)}`, { method: 'DELETE' })
   },
   appointments: {
-    getAll: () => request<Appointment[]>('/appointments'),
-    getByUnit: (unitId: string) => request<Appointment[]>('/appointments', {}, { unitId }),
-    getByPatientId: (patientId: string) => request<Appointment[]>('/appointments', {}, { patientId }),
+    getAll: () => request<Appointment[]>('/appointments').catch(() => []),
+    getByUnit: (unitId: string) => request<Appointment[]>('/appointments', {}, { unitId }).catch(() => []),
+    getByPatientId: (patientId: string) => request<Appointment[]>('/appointments', {}, { patientId }).catch(() => []),
     add: (appt: Omit<Appointment, 'id' | 'status'>) => request<Appointment>('/appointments', { method: 'POST', body: JSON.stringify(appt) }),
+    checkIn: (id: string, priority = false) => request<Appointment>(`/appointments/${pathId(id)}/check-in`, { method: 'POST', body: JSON.stringify({ priority }) }),
+    call: (id: string) => request<Appointment>(`/appointments/${pathId(id)}/call`, { method: 'POST' }),
     update: (id: string, updates: Partial<Appointment>) => request<Appointment>(`/appointments/${pathId(id)}`, { method: 'PATCH', body: JSON.stringify(updates) })
+  },
+  exams: {
+    getByPatientId: (patientId: string) => request<Exam[]>('/exams', {}, { patientId })
+      .catch(() => []),
+    add: (exam: Omit<Exam, 'id' | 'status' | 'resultAvailable'>) => request<Exam>('/exams', { method: 'POST', body: JSON.stringify(exam) })
+  },
+  careHistory: {
+    getByPatientId: (patientId: string) => request<CareHistoryItem[]>('/care-history', {}, { patientId })
+      .catch(() => [])
+  },
+  reminders: {
+    getPreferences: () => request<ReminderPreference>('/reminders/preferences'),
+    savePreferences: (preferences: ReminderPreference) => request<ReminderPreference>('/reminders/preferences', {
+      method: 'PUT',
+      body: JSON.stringify(preferences)
+    })
   },
   system: {
     syncCnes: () => request<void>('/sync/cnes', { method: 'POST' }),

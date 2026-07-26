@@ -14,6 +14,12 @@ export enum AppointmentStatus {
   NO_SHOW = 'NO_SHOW'
 }
 
+export enum ExamStatus {
+  SCHEDULED = 'SCHEDULED',
+  AVAILABLE = 'AVAILABLE',
+  CANCELLED = 'CANCELLED'
+}
+
 export type AttendanceType = 'CHEGADA' | 'SENHA';
 
 export interface OperatingHour {
@@ -196,6 +202,41 @@ export interface Appointment {
   queuePassword?: string;
   checkInTime?: string;
   calledAt?: string;
+}
+
+export interface Exam {
+  id: string;
+  patientId: string;
+  unitId: string;
+  type: string;
+  requestCode?: string;
+  date: string;
+  time: string;
+  status: ExamStatus;
+  preparation?: string;
+  resultAvailable?: boolean;
+}
+
+export interface CareHistoryItem {
+  id: string;
+  patientId: string;
+  unitId: string;
+  date: string;
+  service: string;
+  summary: string;
+  professionalName: string;
+}
+
+export interface ReminderPreference {
+  id?: string;
+  userId: string;
+  channels: {
+    sms: boolean;
+    email: boolean;
+    whatsapp: boolean;
+  };
+  leadTimeHours: number;
+  quietHours: boolean;
 }
 
 export interface AuthState {

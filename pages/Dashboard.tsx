@@ -90,17 +90,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       }));
       setLineData(lineDataRaw.length > 0 ? lineDataRaw : [{name: '01', value: 0}]);
 
-      const pieCounts = appointments.reduce((acc: any, appt) => {
+      const pieCounts: Record<string, number> = {};
+      for (const appt of appointments) {
           const doctor = users.find(u => u.id === appt.doctorId);
           if (doctor && doctor.specialtyId) {
               const spec = specs.find(s => s.id === doctor.specialtyId);
               const specName = spec ? spec.name : 'Outras';
-              acc[specName] = (acc[specName] || 0) + 1;
+              pieCounts[specName] = (pieCounts[specName] || 0) + 1;
           } else {
-              acc['Outras'] = (acc['Outras'] || 0) + 1;
+              pieCounts['Outras'] = (pieCounts['Outras'] || 0) + 1;
           }
-          return acc;
-      }, {});
+      }
 
       const colors = ['#1267D5', '#2BB24C', '#FFD21E', '#9333EA', '#06B6D4', '#94A3B8'];
       const pieDataRaw = Object.entries(pieCounts).map(([name, value], idx) => ({
