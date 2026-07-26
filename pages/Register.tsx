@@ -20,8 +20,8 @@ import {
   User as UserIcon,
   UserPlus,
 } from 'lucide-react';
-import logo from '@/src/assets/images/conectasaudeolinda.png';
 import prefeituraLogo from '@/src/assets/images/prefeitura-olinda.png';
+import { BrandLockup } from '../components/BrandLockup';
 
 const steps = [
   { title: 'Dados', description: 'Identificação do paciente' },
@@ -257,7 +257,7 @@ export const Register: React.FC = () => {
           <div className="flex items-center gap-3 min-w-0">
             <img src={prefeituraLogo} alt="Prefeitura de Olinda" className="h-8 sm:h-11 w-auto object-contain shrink-0" />
             <div className="h-10 w-px bg-slate-200" />
-            <img src={logo} alt="Conecta Saúde Olinda" className="h-10 sm:h-14 w-auto object-contain shrink-0" />
+            <BrandLockup compact />
           </div>
 
           <Link to="/login" className="hidden sm:flex items-center gap-2 rounded-lg bg-blue-50 border border-blue-100 px-3 py-2 text-primary font-black text-sm">

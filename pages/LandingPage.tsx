@@ -15,8 +15,8 @@ import {
   Smartphone,
   Users,
 } from 'lucide-react';
-import logo from '@/src/assets/images/conectasaudeolinda.png';
 import prefeituraLogo from '@/src/assets/images/prefeitura-olinda.png';
+import { BrandLockup } from '../components/BrandLockup';
 
 const mainBenefits = [
   'Mais praticidade para marcar consultas',
@@ -104,7 +104,7 @@ export const LandingPage: React.FC = () => {
           <div className="flex items-center gap-5 min-w-0">
             <img src={prefeituraLogo} alt="Prefeitura de Olinda" className="h-14 w-auto object-contain shrink-0" />
             <div className="h-12 w-px bg-slate-200 hidden sm:block" />
-            <img src={logo} alt="Conecta Saúde Olinda" className="h-16 w-auto object-contain shrink-0" />
+            <BrandLockup />
           </div>
 
           <nav className="hidden lg:flex items-center gap-7 text-sm font-semibold text-slate-600">
@@ -322,7 +322,7 @@ export const LandingPage: React.FC = () => {
           <div className="flex items-center gap-5">
             <img src={prefeituraLogo} alt="Prefeitura de Olinda" className="h-12 w-auto object-contain bg-white rounded-md p-1" />
             <div className="h-10 w-px bg-white/20 hidden sm:block" />
-            <img src={logo} alt="Conecta Saúde Olinda" className="h-12 w-auto object-contain" />
+            <BrandLockup compact />
           </div>
 
           <div className="max-w-xl lg:text-right">

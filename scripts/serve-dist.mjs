@@ -17,6 +17,7 @@ import unzipper from 'unzipper';
 import csv from 'csv-parser';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { hasAppointmentConflict, nextQueuePassword } from '../server/domain/schedulingRules.mjs';
 
 const { Pool } = pg;
 
@@ -24,11 +25,19 @@ const currentDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = join(currentDir, '..');
 const distDir = join(projectRoot, 'dist');
 const indexFile = join(distDir, 'index.html');
+const configuredOrigins = (process.env.CORS_ORIGIN || 'http://localhost:3000,http://localhost:4173')
+  .split(',')
+  .map(origin => origin.trim())
+  .filter(Boolean);
+const allowOrigin = (origin, callback) => {
+  if (!origin || configuredOrigins.includes(origin)) return callback(null, true);
+  return callback(new Error('Origem nao permitida pelo CORS.'));
+};
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: '*',
+    origin: configuredOrigins,
     methods: ['GET', 'POST']
   }
 });
@@ -88,7 +97,7 @@ const pool = new Pool({
   connectionTimeoutMillis: 10000
 });
 
-app.use(cors({ origin: '*' }));
+app.use(cors({ origin: allowOrigin }));
 app.disable('x-powered-by');
 app.use(compression());
 app.use(helmet({
@@ -207,6 +216,37 @@ const mapAppointment = row => ({
   calledAt: row.called_at ?? undefined
 });
 
+const mapExam = row => ({
+  id: row.id,
+  patientId: row.patient_id,
+  unitId: row.unit_id,
+  type: row.type,
+  requestCode: row.request_code ?? undefined,
+  date: row.date,
+  time: row.time,
+  status: row.status,
+  preparation: row.preparation ?? undefined,
+  resultAvailable: row.result_available ?? false
+});
+
+const mapCareEvent = row => ({
+  id: row.id,
+  patientId: row.patient_id,
+  unitId: row.unit_id,
+  date: row.date,
+  service: row.service,
+  summary: row.summary,
+  professionalName: row.professional_name
+});
+
+const mapReminderPreference = row => ({
+  id: row.user_id,
+  userId: row.user_id,
+  channels: typeof row.channels === 'string' ? JSON.parse(row.channels) : row.channels,
+  leadTimeHours: row.lead_time_hours,
+  quietHours: row.quiet_hours
+});
+
 const signToken = user => jwt.sign(
   { sub: user.id, role: user.role, unitId: user.unitId, unitIds: user.unitIds },
   jwtSecret,
@@ -314,6 +354,39 @@ const ensureSchemaAndSeed = async () => {
       created_at timestamptz NOT NULL DEFAULT now()
     );
 
+    CREATE TABLE IF NOT EXISTS exams (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      patient_id uuid NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+      unit_id uuid NOT NULL REFERENCES units(id) ON DELETE RESTRICT,
+      type text NOT NULL,
+      request_code text,
+      date date NOT NULL,
+      time text NOT NULL,
+      status text NOT NULL DEFAULT 'SCHEDULED' CHECK (status IN ('SCHEDULED', 'AVAILABLE', 'CANCELLED')),
+      preparation text,
+      result_available boolean NOT NULL DEFAULT false,
+      created_at timestamptz NOT NULL DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS care_events (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      patient_id uuid NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+      unit_id uuid NOT NULL REFERENCES units(id) ON DELETE RESTRICT,
+      date date NOT NULL,
+      service text NOT NULL,
+      summary text NOT NULL,
+      professional_name text NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS reminder_preferences (
+      user_id uuid PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      channels jsonb NOT NULL DEFAULT '{"sms":true,"email":true,"whatsapp":false}'::jsonb,
+      lead_time_hours integer NOT NULL DEFAULT 24,
+      quiet_hours boolean NOT NULL DEFAULT true,
+      updated_at timestamptz NOT NULL DEFAULT now()
+    );
+
     CREATE TABLE IF NOT EXISTS notifications (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -341,6 +414,8 @@ const ensureSchemaAndSeed = async () => {
     CREATE INDEX IF NOT EXISTS idx_users_unit_role ON users(unit_id, role);
     CREATE INDEX IF NOT EXISTS idx_patients_unit ON patients(unit_id);
     CREATE INDEX IF NOT EXISTS idx_appointments_unit_date ON appointments(unit_id, date);
+    CREATE INDEX IF NOT EXISTS idx_exams_patient ON exams(patient_id, date);
+    CREATE INDEX IF NOT EXISTS idx_care_events_patient ON care_events(patient_id, date);
     CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, read);
 
     CREATE TABLE IF NOT EXISTS health_unit_services (
@@ -514,9 +589,9 @@ const ensureSchemaAndSeed = async () => {
       ['Carlos Paciente', 'paciente@exemplo.local', patientPasswordHash, 'PATIENT', unitId]
     );
 
-    await pool.query(
+    const patient = await pool.query(
       `INSERT INTO patients (name, cpf, sus_number, phone, birth_date, unit_id, user_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
       ['Carlos Paciente', '000.000.000-00', '700000000000000', '(81) 99999-0000', '1985-05-15', unitId, patientUser.rows[0].id]
     );
 
@@ -524,6 +599,43 @@ const ensureSchemaAndSeed = async () => {
     for (const name of specialties) {
       await pool.query('INSERT INTO specialties (name) VALUES ($1) ON CONFLICT (name) DO NOTHING', [name]);
     }
+
+    const spec = await pool.query("SELECT id FROM specialties WHERE name = 'Clinica Geral' LIMIT 1");
+    const professionalPasswordHash = await bcrypt.hash('Demo@123456', 12);
+    const doctor = await pool.query(
+      `INSERT INTO users (name, matricula, email, password_hash, role, specialty_id, unit_id, schedule, max_daily_patients)
+       VALUES ($1, $2, $3, $4, 'DOCTOR', $5, $6, $7, $8)
+       RETURNING id`,
+      ['Dra. Ana Bezerra', 'MED001', 'ana.bezerra@demo.local', professionalPasswordHash, spec.rows[0]?.id ?? null, unitId, JSON.stringify([{ dayOfWeek: 1, startTime: '08:00', endTime: '12:00' }, { dayOfWeek: 3, startTime: '08:00', endTime: '12:00' }, { dayOfWeek: 5, startTime: '08:00', endTime: '12:00' }]), 12]
+    );
+
+    const attendant = await pool.query(
+      `INSERT INTO users (name, matricula, email, password_hash, role, unit_id)
+       VALUES ($1, $2, $3, $4, 'ATTENDANT', $5)
+       RETURNING id`,
+      ['Joao Recepcao', 'REC001', 'recepcao@demo.local', professionalPasswordHash, unitId]
+    );
+
+    await pool.query('INSERT INTO user_units (user_id, unit_id) VALUES ($1, $2), ($3, $2), ($4, $2) ON CONFLICT DO NOTHING', [patientUser.rows[0].id, unitId, doctor.rows[0].id, attendant.rows[0].id]);
+
+    const appointmentDate = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+    await pool.query(
+      `INSERT INTO appointments (patient_id, doctor_id, unit_id, date, time, notes)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [patient.rows[0].id, doctor.rows[0].id, unitId, appointmentDate, '09:00', 'Consulta ficticia de acompanhamento']
+    );
+
+    await pool.query(
+      `INSERT INTO exams (patient_id, unit_id, type, request_code, date, time, status, preparation, result_available)
+       VALUES ($1, $2, $3, $4, $5, $6, 'AVAILABLE', $7, true)`,
+      [patient.rows[0].id, unitId, 'Hemograma completo', 'REQ-DEMO-2026', appointmentDate, '07:30', 'Jejum de 8 horas e documento com foto.']
+    );
+
+    await pool.query(
+      `INSERT INTO care_events (patient_id, unit_id, date, service, summary, professional_name)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [patient.rows[0].id, unitId, new Date(Date.now() - 604800000).toISOString().slice(0, 10), 'Acolhimento', 'Atendimento administrativo ficticio para orientacao de agendamento.', 'Equipe de recepcao']
+    );
 
     await pool.query('COMMIT');
   } catch (error) {
@@ -1244,15 +1356,94 @@ app.get('/api/appointments', authenticate, async (req, res, next) => {
 
 app.post('/api/appointments', authenticate, async (req, res, next) => {
   try {
+    const patientId = requireText(req.body.patientId, 'paciente', 80);
+    const doctorId = requireText(req.body.doctorId, 'profissional', 80);
+    const unitId = requireText(req.body.unitId, 'unidade', 80);
+    const date = requireText(req.body.date, 'data', 20);
+    const time = requireText(req.body.time, 'horario', 10);
+
+    if (!canAccessUnit(req, unitId)) return res.status(403).json({ error: 'Acesso negado para esta unidade.' });
+
+    const [patient, doctor, existing] = await Promise.all([
+      pool.query('SELECT * FROM patients WHERE id = $1', [patientId]),
+      pool.query("SELECT * FROM users WHERE id = $1 AND role = 'DOCTOR' AND active = true", [doctorId]),
+      pool.query('SELECT * FROM appointments WHERE doctor_id = $1 AND date = $2', [doctorId, date])
+    ]);
+
+    if (!patient.rows[0]) return res.status(400).json({ error: 'Paciente invalido.' });
+    if (!doctor.rows[0]) return res.status(400).json({ error: 'Profissional invalido.' });
+    if (!canAccessUnit(req, patient.rows[0].unit_id) || !canAccessUnit(req, doctor.rows[0].unit_id)) {
+      return res.status(403).json({ error: 'Acesso negado para os dados enviados.' });
+    }
+
+    if (hasAppointmentConflict(existing.rows, { doctorId, date, time })) {
+      return res.status(409).json({ error: 'Ja existe agendamento ativo para este profissional neste horario.' });
+    }
+
+    if (doctor.rows[0].max_daily_patients) {
+      const activeCount = existing.rows.filter(row => row.status !== 'CANCELLED').length;
+      if (activeCount >= doctor.rows[0].max_daily_patients) {
+        return res.status(409).json({ error: 'Limite diario do profissional atingido.' });
+      }
+    }
+
     const { rows } = await pool.query(
       `INSERT INTO appointments (patient_id, doctor_id, unit_id, date, time, notes)
        VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-      [req.body.patientId, req.body.doctorId, req.body.unitId, req.body.date, req.body.time, req.body.notes || null]
+      [patientId, doctorId, unitId, date, time, req.body.notes ? sanitizeText(req.body.notes).slice(0, 500) : null]
     );
     await audit(req, 'CREATE', 'appointment', rows[0].id);
     res.status(201).json(mapAppointment(rows[0]));
   } catch (error) {
     next(error);
+  }
+});
+
+app.post('/api/appointments/:id/check-in', authenticate, authorize('ADMIN', 'GENERAL_SUPERVISOR', 'ATTENDANT'), async (req, res, next) => {
+  try {
+    const current = await pool.query('SELECT * FROM appointments WHERE id = $1', [req.params.id]);
+    const appointment = current.rows[0];
+    if (!appointment) return res.status(404).json({ error: 'Agendamento nao encontrado.' });
+    if (!canAccessUnit(req, appointment.unit_id)) return res.status(403).json({ error: 'Acesso negado.' });
+    if (appointment.status === 'CANCELLED') return res.status(400).json({ error: 'Agendamento cancelado nao pode receber check-in.' });
+
+    const unit = await pool.query('SELECT attendance_type FROM units WHERE id = $1', [appointment.unit_id]);
+    const todayRows = await pool.query('SELECT * FROM appointments WHERE unit_id = $1 AND date = $2', [appointment.unit_id, appointment.date]);
+    const queuePassword = unit.rows[0]?.attendance_type === 'SENHA'
+      ? nextQueuePassword(todayRows.rows, Boolean(req.body.priority), appointment.date)
+      : appointment.queue_password;
+
+    const { rows } = await pool.query(
+      `UPDATE appointments
+       SET queue_password = $1, check_in_time = COALESCE(check_in_time, now())
+       WHERE id = $2
+       RETURNING *`,
+      [queuePassword, req.params.id]
+    );
+    await audit(req, 'CHECK_IN', 'appointment', req.params.id);
+    return res.json(mapAppointment(rows[0]));
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.post('/api/appointments/:id/call', authenticate, authorize('ADMIN', 'GENERAL_SUPERVISOR', 'ATTENDANT'), async (req, res, next) => {
+  try {
+    const current = await pool.query('SELECT * FROM appointments WHERE id = $1', [req.params.id]);
+    const appointment = current.rows[0];
+    if (!appointment) return res.status(404).json({ error: 'Agendamento nao encontrado.' });
+    if (!canAccessUnit(req, appointment.unit_id)) return res.status(403).json({ error: 'Acesso negado.' });
+    if (!appointment.check_in_time) return res.status(400).json({ error: 'Realize o check-in antes da chamada.' });
+
+    const { rows } = await pool.query(
+      'UPDATE appointments SET called_at = now() WHERE id = $1 RETURNING *',
+      [req.params.id]
+    );
+    await audit(req, 'CALL', 'appointment', req.params.id);
+    io.emit('queue_call', mapAppointment(rows[0]));
+    return res.json(mapAppointment(rows[0]));
+  } catch (error) {
+    return next(error);
   }
 });
 
@@ -1279,6 +1470,131 @@ app.patch('/api/appointments/:id', authenticate, async (req, res, next) => {
     );
     await audit(req, 'UPDATE', 'appointment', req.params.id);
     return res.json(mapAppointment(rows[0]));
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.get('/api/exams', authenticate, async (req, res, next) => {
+  try {
+    const params = [];
+    const where = [];
+
+    if (req.query.patientId) {
+      params.push(String(req.query.patientId));
+      where.push(`patient_id = $${params.length}`);
+    }
+
+    if (!canManageAllUnits(req)) {
+      params.push(req.user.unitId);
+      where.push(`unit_id = $${params.length}`);
+    } else if (req.query.unitId) {
+      params.push(String(req.query.unitId));
+      where.push(`unit_id = $${params.length}`);
+    }
+
+    const { rows } = await pool.query(`SELECT * FROM exams ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY date DESC, time`, params);
+    res.json(rows.map(mapExam));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/exams', authenticate, async (req, res, next) => {
+  try {
+    const patientId = requireText(req.body.patientId, 'paciente', 80);
+    const unitId = requireText(req.body.unitId, 'unidade', 80);
+    const type = requireText(req.body.type, 'tipo de exame', 120);
+    const date = requireText(req.body.date, 'data', 20);
+    const time = requireText(req.body.time, 'horario', 10);
+
+    if (!canAccessUnit(req, unitId)) return res.status(403).json({ error: 'Acesso negado para esta unidade.' });
+
+    const patient = await pool.query('SELECT * FROM patients WHERE id = $1', [patientId]);
+    if (!patient.rows[0]) return res.status(400).json({ error: 'Paciente invalido.' });
+
+    const { rows } = await pool.query(
+      `INSERT INTO exams (patient_id, unit_id, type, request_code, date, time, preparation)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING *`,
+      [
+        patientId,
+        unitId,
+        type,
+        req.body.requestCode ? sanitizeText(req.body.requestCode).slice(0, 80) : null,
+        date,
+        time,
+        req.body.preparation ? sanitizeText(req.body.preparation).slice(0, 500) : null
+      ]
+    );
+    await audit(req, 'CREATE', 'exam', rows[0].id);
+    res.status(201).json(mapExam(rows[0]));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/care-history', authenticate, async (req, res, next) => {
+  try {
+    const params = [];
+    const where = [];
+
+    if (req.query.patientId) {
+      params.push(String(req.query.patientId));
+      where.push(`patient_id = $${params.length}`);
+    }
+
+    if (!canManageAllUnits(req)) {
+      params.push(req.user.unitId);
+      where.push(`unit_id = $${params.length}`);
+    }
+
+    const { rows } = await pool.query(`SELECT * FROM care_events ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY date DESC`, params);
+    res.json(rows.map(mapCareEvent));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/reminders/preferences', authenticate, async (req, res, next) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM reminder_preferences WHERE user_id = $1', [req.user.id]);
+    if (rows[0]) return res.json(mapReminderPreference(rows[0]));
+
+    const created = await pool.query(
+      `INSERT INTO reminder_preferences (user_id)
+       VALUES ($1)
+       RETURNING *`,
+      [req.user.id]
+    );
+    return res.json(mapReminderPreference(created.rows[0]));
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.put('/api/reminders/preferences', authenticate, async (req, res, next) => {
+  try {
+    const channels = {
+      sms: Boolean(req.body.channels?.sms),
+      email: Boolean(req.body.channels?.email),
+      whatsapp: Boolean(req.body.channels?.whatsapp)
+    };
+    const leadTimeHours = Math.min(Math.max(Number(req.body.leadTimeHours) || 24, 1), 168);
+
+    const { rows } = await pool.query(
+      `INSERT INTO reminder_preferences (user_id, channels, lead_time_hours, quiet_hours, updated_at)
+       VALUES ($1, $2, $3, $4, now())
+       ON CONFLICT (user_id) DO UPDATE
+       SET channels = EXCLUDED.channels,
+           lead_time_hours = EXCLUDED.lead_time_hours,
+           quiet_hours = EXCLUDED.quiet_hours,
+           updated_at = now()
+       RETURNING *`,
+      [req.user.id, JSON.stringify(channels), leadTimeHours, Boolean(req.body.quietHours)]
+    );
+    await audit(req, 'UPDATE', 'reminder_preferences', req.user.id);
+    return res.json(mapReminderPreference(rows[0]));
   } catch (error) {
     return next(error);
   }

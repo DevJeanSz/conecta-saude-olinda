@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { User, Appointment, Specialty, AppointmentStatus, HealthUnit } from '../types';
+import { User, Patient, Appointment, Specialty, AppointmentStatus, HealthUnit } from '../types';
 import { api } from '../services/api';
 import { STATUS_LABELS } from '../constants';
 import { Calendar, Clock, User as UserIcon, CheckCircle, Search, Info, MapPin, Map as MapIcon, Navigation } from 'lucide-react';
@@ -31,6 +31,7 @@ export const PatientPortal: React.FC = () => {
   const [selectedTime, setSelectedTime] = useState('');
   const [isDayFull, setIsDayFull] = useState(false);
   const [noSchedule, setNoSchedule] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const [patient, setPatient] = useState<Patient | null>(null);
   const [patientUnits, setPatientUnits] = useState<HealthUnit[]>([]);
@@ -190,7 +191,7 @@ export const PatientPortal: React.FC = () => {
         ).length;
 
         if (dailyCount >= selectedDoc.maxDailyPatients) {
-            alert('Desculpe, as vagas para este médico acabaram de ser preenchidas para esta data.');
+            setFeedback({ type: 'error', message: 'As vagas para este profissional foram preenchidas para esta data.' });
             return;
         }
       }
@@ -219,7 +220,7 @@ export const PatientPortal: React.FC = () => {
           notes: 'Agendado pelo Portal do Paciente'
       });
 
-      alert('Consulta agendada com sucesso!');
+      setFeedback({ type: 'success', message: 'Consulta agendada com sucesso. Ela ja aparece em Minhas consultas.' });
       setSelectedSpec('');
       setSelectedUnitId('');
       setSelectedDoc(null);
@@ -265,6 +266,16 @@ export const PatientPortal: React.FC = () => {
           <h2 className="text-3xl font-black text-primary mb-2">Agendamento de Consulta</h2>
           <p className="text-slate-600 text-lg">Olá, <span className="font-bold">{currentUser?.name.split(' ')[0]}</span>. {step === 1 ? 'Selecione a especialidade para qual deseja agendar sua consulta.' : 'Siga os passos abaixo para agendar.'}</p>
       </div>
+
+      {feedback && (
+        <div className={`rounded-2xl border px-4 py-3 text-sm font-bold ${
+          feedback.type === 'success'
+            ? 'border-green-200 bg-green-50 text-green-700'
+            : 'border-red-200 bg-red-50 text-red-700'
+        }`}>
+          {feedback.message}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           

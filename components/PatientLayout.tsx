@@ -1,41 +1,72 @@
-import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { User } from '../types';
-import { Menu, Bell, X, LogOut, Home, Calendar, FileText, MapPin, User as UserIcon, Check } from 'lucide-react';
-import logo from '@/src/assets/images/conectasaudeolinda.png';
+import React, { useEffect, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import {
+  Bell,
+  Calendar,
+  Check,
+  ClipboardList,
+  FileText,
+  FlaskConical,
+  Home,
+  Info,
+  LogOut,
+  MapPin,
+  Menu,
+  User as UserIcon,
+  X,
+} from 'lucide-react';
+import { BrandLockup } from './BrandLockup';
 import { api, apiOrigin } from '../services/api';
-import { Notification } from '../types';
+import { Notification, User } from '../types';
 import { io } from 'socket.io-client';
+
 interface PatientLayoutProps {
   children: React.ReactNode;
   user: User;
   onLogout: () => void;
 }
 
+const navItems = [
+  { label: 'Inicio', path: '/patient-portal', icon: Home },
+  { label: 'Agendar', path: '/patient-portal/schedule', icon: Calendar },
+  { label: 'Consultas', path: '/patient-portal/appointments', icon: FileText },
+  { label: 'Unidades', path: '/patient-portal/units', icon: MapPin },
+  { label: 'Perfil', path: '/perfil', icon: UserIcon },
+];
+
+const drawerItems = [
+  ...navItems,
+  { label: 'Atendimentos', path: '/patient-portal/care-history', icon: ClipboardList },
+  { label: 'Agendar exame', path: '/patient-portal/exams/schedule', icon: FlaskConical },
+  { label: 'Meus exames', path: '/patient-portal/exams', icon: ClipboardList },
+  { label: 'Lembretes', path: '/patient-portal/reminders', icon: Bell },
+  { label: 'Informacoes', path: '/patient-portal/information', icon: Info },
+];
+
 export const PatientLayout: React.FC<PatientLayoutProps> = ({ children, user, onLogout }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const navigate = useNavigate();
+  const location = useLocation();
 
-  React.useEffect(() => {
-    if (user?.id) {
-      api.notifications.getForUser()
-        .then(notifs => setNotifications(Array.isArray(notifs) ? notifs : []))
-        .catch(err => console.error('Failed to fetch notifications:', err));
-      
-      const socket = io(apiOrigin);
-      socket.emit('join', user.id);
-      
-      socket.on('new_notification', (notif: Notification) => {
-        setNotifications(prev => [notif, ...prev]);
-      });
-      
-      return () => {
-        socket.disconnect();
-      };
-    }
-  }, [user]);
+  useEffect(() => {
+    if (!user?.id) return;
+
+    api.notifications.getForUser()
+      .then(notifs => setNotifications(Array.isArray(notifs) ? notifs : []))
+      .catch(() => setNotifications([]));
+
+    const socket = io(apiOrigin);
+    socket.emit('join', user.id);
+    socket.on('new_notification', (notif: Notification) => {
+      setNotifications(prev => [notif, ...prev]);
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [user.id]);
 
   const handleNavigation = (path: string) => {
     navigate(path);
@@ -44,59 +75,66 @@ export const PatientLayout: React.FC<PatientLayoutProps> = ({ children, user, on
 
   const markAsRead = async (id: string) => {
     await api.notifications.markAsRead(id);
-    setNotifications(prev => prev.filter(n => n.id !== id));
+    setNotifications(prev => prev.filter(notification => notification.id !== id));
   };
 
+  const isActive = (path: string) => location.pathname === path;
+
   return (
-    <div className="flex flex-col min-h-screen bg-[#F8F9FA] text-slate-800 font-sans">
-      {/* Mobile-Style Header */}
-      <header className="bg-white sticky top-0 z-50">
-        <div className="flex items-center justify-between px-4 py-3 max-w-3xl mx-auto">
-          <button 
+    <div className="flex min-h-screen flex-col bg-[#F7FBFF] font-sans text-[#10223F]">
+      <header className="sticky top-0 z-50 border-b border-[#D9E6F5] bg-white">
+        <div className="mx-auto flex h-16 max-w-3xl items-center justify-between gap-3 px-4">
+          <button
             onClick={() => setIsMenuOpen(true)}
-            className="p-2 -ml-2 text-slate-600 hover:text-primary transition-colors focus:outline-none"
+            className="flex h-11 w-11 items-center justify-center rounded-xl text-[#5F708A] transition-colors hover:bg-[#F1F7FD] hover:text-[#0B60C9] focus:outline-none focus:ring-4 focus:ring-[#0B60C9]/20"
+            type="button"
+            aria-label="Abrir menu"
           >
-            <Menu className="w-7 h-7" />
+            <Menu className="h-7 w-7" />
           </button>
-          
-          <img src={logo} alt="Conecta Saúde" className="h-10 object-contain cursor-pointer" onClick={() => navigate('/patient-portal')} />
-          
+
+          <button type="button" onClick={() => navigate('/patient-portal')} className="rounded-xl focus:outline-none focus:ring-4 focus:ring-[#0B60C9]/20">
+            <BrandLockup compact />
+          </button>
+
           <div className="relative">
-            <button 
+            <button
               onClick={() => setShowNotifications(!showNotifications)}
-              className="p-2 -mr-2 text-slate-600 hover:text-primary transition-colors relative focus:outline-none"
+              className="relative flex h-11 w-11 items-center justify-center rounded-xl text-[#5F708A] transition-colors hover:bg-[#F1F7FD] hover:text-[#0B60C9] focus:outline-none focus:ring-4 focus:ring-[#0B60C9]/20"
+              type="button"
+              aria-label="Abrir notificacoes"
             >
-              <Bell className="w-6 h-6" />
+              <Bell className="h-6 w-6" />
               {notifications.length > 0 && (
-                <span className="absolute top-1 right-2 w-4 h-4 bg-red-500 rounded-full border border-white text-[9px] font-bold text-white flex items-center justify-center">
+                <span className="absolute right-2 top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#D51F2A] px-1 text-[9px] font-black text-white">
                   {notifications.length}
                 </span>
               )}
             </button>
-            
+
             {showNotifications && (
-              <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-slate-100 z-50 overflow-hidden">
-                <div className="p-3 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-                  <h4 className="font-bold text-slate-700">Notificações</h4>
-                  <button onClick={() => setShowNotifications(false)} className="text-slate-400 hover:text-slate-600">
-                    <X className="w-4 h-4" />
+              <div className="absolute right-0 mt-2 w-80 overflow-hidden rounded-2xl border border-[#D9E6F5] bg-white shadow-[0_24px_64px_rgba(6,41,111,0.16)]">
+                <div className="flex items-center justify-between border-b border-[#D9E6F5] bg-[#F7FBFF] p-3">
+                  <h2 className="font-black text-[#10223F]">Notificacoes</h2>
+                  <button onClick={() => setShowNotifications(false)} className="text-[#8A99AD] hover:text-[#10223F]" type="button" aria-label="Fechar notificacoes">
+                    <X className="h-4 w-4" />
                   </button>
                 </div>
-                <div className="max-h-[300px] overflow-y-auto">
+                <div className="max-h-80 overflow-y-auto">
                   {notifications.length === 0 ? (
-                    <div className="p-4 text-center text-sm text-slate-500">Nenhuma notificação.</div>
+                    <div className="p-5 text-center text-sm font-semibold text-[#5F708A]">Nenhuma notificacao.</div>
                   ) : (
-                    notifications.map(n => (
-                      <div key={n.id} className="p-3 border-b border-slate-50 hover:bg-slate-50 transition-colors group">
-                        <p className="text-sm text-slate-600">{n.message}</p>
-                        <div className="mt-2 flex justify-end">
-                          <button 
-                            onClick={() => markAsRead(n.id)}
-                            className="text-xs flex items-center gap-1 text-primary hover:text-blue-700 font-medium"
-                          >
-                            <Check className="w-3 h-3" /> Marcar como lido
-                          </button>
-                        </div>
+                    notifications.map(notification => (
+                      <div key={notification.id} className="border-b border-[#F1F7FD] p-3">
+                        <p className="text-sm font-semibold text-[#5F708A]">{notification.message}</p>
+                        <button
+                          onClick={() => markAsRead(notification.id)}
+                          className="mt-2 inline-flex items-center gap-1 text-xs font-black text-[#0B60C9]"
+                          type="button"
+                        >
+                          <Check className="h-3 w-3" />
+                          Marcar como lida
+                        </button>
                       </div>
                     ))
                   )}
@@ -106,74 +144,82 @@ export const PatientLayout: React.FC<PatientLayoutProps> = ({ children, user, on
           </div>
         </div>
 
-        {/* Colored Bottom Bar */}
-        <div className="w-full max-w-3xl mx-auto flex h-[3px]">
-          <div className="flex-1 bg-[#0F4C81]"></div>
-          <div className="flex-1 bg-[#4CAF50]"></div>
-          <div className="flex-1 bg-[#FFC107]"></div>
-          <div className="flex-1 bg-[#E53935]"></div>
+        <div className="mx-auto flex h-1 max-w-3xl">
+          <div className="flex-1 bg-[#06296F]" />
+          <div className="flex-1 bg-[#048C47]" />
+          <div className="flex-1 bg-[#FFCF22]" />
+          <div className="flex-1 bg-[#D51F2A]" />
         </div>
       </header>
 
-      {/* Side Drawer Menu */}
       {isMenuOpen && (
         <div className="fixed inset-0 z-[60] flex">
-          {/* Overlay */}
-          <div 
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity"
-            onClick={() => setIsMenuOpen(false)}
-          ></div>
-          
-          {/* Drawer */}
-          <div className="relative w-4/5 max-w-xs bg-white h-full flex flex-col shadow-2xl animate-fade-in-right">
-            <div className="p-4 flex items-center justify-between border-b border-slate-100">
-               <img src={logo} alt="Conecta Saúde" className="h-8" />
-               <button onClick={() => setIsMenuOpen(false)} className="p-2 text-slate-400 hover:text-slate-600">
-                 <X className="w-6 h-6" />
-               </button>
-            </div>
-            
-            <div className="p-6 border-b border-slate-100 bg-slate-50 flex items-center gap-3">
-               <div className="w-12 h-12 bg-blue-100 text-[#0F4C81] rounded-full flex items-center justify-center font-bold text-lg">
-                 {user.name.charAt(0)}
-               </div>
-               <div>
-                  <p className="font-bold text-slate-800">{user.name}</p>
-                  <p className="text-xs text-slate-500">Cartão SUS: {user.susNumber || 'Não informado'}</p>
-               </div>
+          <button className="fixed inset-0 bg-[#06142D]/60" onClick={() => setIsMenuOpen(false)} type="button" aria-label="Fechar menu" />
+
+          <aside className="relative flex h-full w-4/5 max-w-xs flex-col bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[#D9E6F5] p-4">
+              <BrandLockup compact />
+              <button onClick={() => setIsMenuOpen(false)} className="flex h-10 w-10 items-center justify-center rounded-xl text-[#8A99AD] hover:bg-[#F1F7FD]" type="button" aria-label="Fechar menu">
+                <X className="h-6 w-6" />
+              </button>
             </div>
 
-            <nav className="flex-1 p-4 flex flex-col gap-2 overflow-y-auto">
-               <button onClick={() => handleNavigation('/patient-portal')} className="flex items-center gap-3 w-full p-3 rounded-xl hover:bg-slate-50 text-slate-700 font-medium text-left transition-colors">
-                  <Home className="w-5 h-5 text-slate-400" /> Início
-               </button>
-               <button onClick={() => handleNavigation('/patient-portal/schedule')} className="flex items-center gap-3 w-full p-3 rounded-xl hover:bg-slate-50 text-slate-700 font-medium text-left transition-colors">
-                  <Calendar className="w-5 h-5 text-slate-400" /> Agendar Consulta
-               </button>
-               <button onClick={() => { setIsMenuOpen(false); alert('Suas consultas estão no painel inicial.'); }} className="flex items-center gap-3 w-full p-3 rounded-xl hover:bg-slate-50 text-slate-700 font-medium text-left transition-colors">
-                  <FileText className="w-5 h-5 text-slate-400" /> Minhas Consultas
-               </button>
-               <button onClick={() => { setIsMenuOpen(false); alert('Em breve!'); }} className="flex items-center gap-3 w-full p-3 rounded-xl hover:bg-slate-50 text-slate-700 font-medium text-left transition-colors">
-                  <MapPin className="w-5 h-5 text-slate-400" /> Unidades de Saúde
-               </button>
-               <Link to="/perfil" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-3 w-full p-3 rounded-xl hover:bg-slate-50 text-slate-700 font-medium text-left transition-colors">
-                  <UserIcon className="w-5 h-5 text-slate-400" /> Meu Perfil
-               </Link>
+            <div className="flex items-center gap-3 border-b border-[#D9E6F5] bg-[#F7FBFF] p-5">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#DFF0FF] text-lg font-black text-[#0B60C9]">
+                {user.name.charAt(0)}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate font-black text-[#10223F]">{user.name}</p>
+                <p className="text-xs font-semibold text-[#5F708A]">Cartao SUS: {user.susNumber || 'Nao informado'}</p>
+              </div>
+            </div>
+
+            <nav className="flex-1 space-y-1 overflow-y-auto p-4">
+              {drawerItems.map(item => (
+                <button
+                  key={item.path}
+                  onClick={() => handleNavigation(item.path)}
+                  className={`flex h-12 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-black transition-colors ${
+                    isActive(item.path) ? 'bg-[#0B60C9] text-white' : 'text-[#5F708A] hover:bg-[#F1F7FD] hover:text-[#0B60C9]'
+                  }`}
+                  type="button"
+                >
+                  <item.icon className="h-5 w-5" />
+                  {item.label}
+                </button>
+              ))}
             </nav>
 
-            <div className="p-4 border-t border-slate-100">
-               <button onClick={onLogout} className="flex items-center gap-3 w-full p-3 rounded-xl hover:bg-red-50 text-red-600 font-bold text-left transition-colors">
-                  <LogOut className="w-5 h-5" /> Sair
-               </button>
+            <div className="border-t border-[#D9E6F5] p-4">
+              <button onClick={onLogout} className="flex h-12 w-full items-center gap-3 rounded-xl px-3 text-left font-black text-[#D51F2A] hover:bg-[#FFE6E8]" type="button">
+                <LogOut className="h-5 w-5" />
+                Sair
+              </button>
             </div>
-          </div>
+          </aside>
         </div>
       )}
 
-      {/* Main Content Area */}
-      <main className="flex-1 w-full max-w-3xl mx-auto flex flex-col px-4 py-6">
+      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 py-6">
         {children}
       </main>
+
+      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-[#D9E6F5] bg-white sm:hidden">
+        <div className="flex h-16">
+          {navItems.map(item => (
+            <Link
+              key={item.path}
+              to={item.path}
+              className={`flex flex-1 flex-col items-center justify-center gap-1 text-[10px] font-black ${
+                isActive(item.path) ? 'text-[#0B60C9]' : 'text-[#8A99AD]'
+              }`}
+            >
+              <item.icon className="h-5 w-5" />
+              {item.label}
+            </Link>
+          ))}
+        </div>
+      </nav>
     </div>
   );
 };
