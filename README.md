@@ -1,107 +1,144 @@
-<div align="center">
-<img width="1200" height="475" alt="Banner Conecta Saúde Olinda" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+# Conecta Saude Olinda
 
-# Conecta Saúde Olinda 🏥
+Protótipo funcional full-stack para organizar acesso a servicos da rede municipal de saude de Olinda, com dados ficticios de desenvolvimento.
 
-**Sistema Integrado de Saúde Pública e Telemedicina**
+## Arquitetura
 
-O **Conecta Saúde Olinda** é uma plataforma moderna e completa projetada para digitalizar, organizar e otimizar o atendimento de saúde da rede pública municipal. A aplicação atende desde o agendamento de consultas pelo próprio paciente até a gestão de unidades de saúde pelos administradores.
+Fluxo obrigatorio:
 
-</div>
+`Frontend React -> API Express -> validacao/regras -> PostgreSQL -> API -> Frontend`
 
----
+O frontend usa apenas `services/api.ts` para chamar endpoints HTTP. Ele nao importa `pg`, ORM, cliente Supabase/Firebase, credenciais ou strings de conexao.
 
-## 🎯 Principais Funcionalidades
+## Tecnologias
 
-- **Portal do Paciente:** Agendamento rápido, interface estilo "wizard", acesso a histórico, visualização de médicos disponíveis e notificações em tempo real.
-- **Painel Profissional (Médicos/Recepção/Admin):** Gestão de filas, aprovação de pacientes, agenda diária e prontuários médicos.
-- **Painel de Chamada (Display TV):** Tela dedicada para recepção que exibe as senhas sendo chamadas.
-- **Integração com CNES:** Busca automatizada e sincronização de dados oficiais de Unidades de Saúde usando a API do Ministério da Saúde.
-- **Notificações em Tempo Real:** Sistema de WebSockets para avisos imediatos (ex: Lembretes de Consulta, Alterações no Atendimento).
-- **Segurança e Permissões:** Autenticação baseada em tokens (JWT) e restrição de rotas por perfis (Paciente, Médico, Recepcionista, Admin).
+- Frontend: React 18, TypeScript, Vite, React Router, Tailwind via CDN, lucide-react, Recharts.
+- Backend: Node.js, Express, Socket.IO, JWT, bcryptjs, `pg`.
+- Banco: PostgreSQL.
+- Validacao atual: validacoes manuais no backend, utilitarios de dominio em `server/domain`.
+- Migrations: SQL versionado em `database/migrations`.
 
----
+## Estrutura
 
-## 💻 Tecnologias Utilizadas
+- `pages/`: telas publicas, portal do paciente e administracao.
+- `components/`: shells e componentes de apoio.
+- `services/api.ts`: cliente HTTP do frontend.
+- `scripts/serve-dist.mjs`: API Express e servidor dos arquivos de producao.
+- `server/domain/`: regras de negocio testaveis.
+- `database/migrations/`: schema versionado.
+- `tests/`: testes unitarios das regras de dominio.
 
-**Frontend (Interface do Usuário)**
-- **React.js** com **TypeScript**
-- **Vite** para build e desenvolvimento rápido
-- **Tailwind CSS** para estilização moderna e responsiva
-- **Lucide React** para iconografia
-- **Socket.io-Client** para comunicação em tempo real
+## Ambiente
 
-**Backend (Servidor e API)**
-- **Node.js** com **Express**
-- **PostgreSQL (via pacote pg)** para banco de dados relacional
-- **Socket.IO** para eventos e notificações WebSockets
-- **JWT (JSON Web Token)** para autenticação
-- **Bcrypt** para criptografia de senhas
+1. Instale dependencias:
 
----
-
-## 🚀 Como Inicializar o Projeto Localmente
-
-Siga o passo a passo abaixo para rodar a aplicação no seu computador:
-
-### 1. Pré-requisitos
-- Ter o **Node.js** instalado (versão 18+ recomendada)
-- Ter o **PostgreSQL** instalado e rodando localmente (ou possuir a URL de um banco de dados em nuvem, como o Supabase)
-- **Git** para clonar o repositório
-
-### 2. Clonando o Repositório
-```bash
-git clone https://github.com/DevJeanSz/conecta-saude-olinda.git
-cd conecta-saude-olinda
-```
-
-### 3. Instalação das Dependências
-Instale todos os pacotes necessários utilizando o npm:
 ```bash
 npm install
 ```
 
-### 4. Configuração das Variáveis de Ambiente
-Crie um arquivo `.env` na raiz do projeto (use o `.env.example` caso exista) e defina as variáveis obrigatórias.
+2. Copie `.env.example` para `.env` e ajuste valores locais.
 
-Exemplo básico de `.env`:
-```env
-# Banco de Dados
-DATABASE_URL="postgresql://usuario:senha@localhost:5432/conecta_saude"
+3. Prepare o banco:
 
-# Chave secreta para os Tokens (JWT)
-JWT_SECRET="sua-chave-secreta-muito-segura-aqui"
-
-# Porta do Servidor (Opcional)
-PORT=4173
+```bash
+npm run migrate
+npm run seed
 ```
 
-### 5. Configuração do Banco de Dados
-O sistema criará automaticamente as tabelas (migrations) na primeira vez em que for rodado (através do arquivo `schema.sql` embutido no código backend). Basta garantir que o banco especificado na `DATABASE_URL` já esteja criado.
+4. Rode o frontend em desenvolvimento:
 
-### 6. Executando o Sistema
-
-Para ambiente de **Desenvolvimento** (com live-reload):
 ```bash
-# Inicia tanto o Front-end pelo Vite quanto o Backend via tsx
 npm run dev
 ```
 
-Para gerar a versão de **Produção** e rodar:
+5. Gere producao e suba API + estaticos:
+
 ```bash
-# Compila o Front-end e inicia o servidor Express servindo os estáticos
 npm run build
 npm run start
 ```
 
-Após iniciar, o projeto ficará disponível por padrão na porta `4173`. Acesse no seu navegador:  
-👉 **http://localhost:4173**
+## Comandos
 
----
+```bash
+npm run lint
+npm run typecheck
+npm test
+npm run build
+npm run migrate
+npm run seed
+```
 
-## 🌐 Deploy em Nuvem (Railway, Render, etc)
+`npm run lint` executa a verificacao automatica de fronteira frontend/backend e falha se o frontend importar banco, ORM ou credenciais privadas.
 
-O projeto está otimizado para deploy facilitado em plataformas como o **Railway**.
-- Certifique-se de definir a variável de ambiente `DATABASE_URL` da nuvem nas configurações do serviço.
-- O comando de "Start Command" deve ser: `npm run start` (ou deixar que o arquivo `package.json` defina automaticamente via instrução de start).
-- Os pacotes geram a build de produção do frontend (`dist`) automaticamente e o `scripts/serve-dist.mjs` assume o controle como servidor web (servindo APIs e arquivos estáticos na mesma porta).
+## Perfis ficticios
+
+Quando `scripts/serve-dist.mjs` inicializa um banco vazio, cria dados demonstrativos. O seed dedicado usa a senha ficticia `Demo@123456`.
+
+- Gestor: `ADMIN001`
+- Medico: `MED001`
+- Recepcao: `REC001`
+- Paciente: acesso por nome e Cartao SUS ficticio
+
+Nunca use esses dados em producao.
+
+## Rotas principais
+
+- `/`: landing page.
+- `/login`: acesso de paciente e profissional.
+- `/register`: cadastro de paciente.
+- `/patient-portal`: inicio do cidadao.
+- `/patient-portal/schedule`: agendar consulta.
+- `/patient-portal/appointments`: minhas consultas.
+- `/patient-portal/care-history`: atendimentos.
+- `/patient-portal/units`: unidades de saude.
+- `/patient-portal/exams/schedule`: agendar exame.
+- `/patient-portal/exams`: meus exames.
+- `/patient-portal/reminders`: lembretes.
+- `/patient-portal/information`: informacoes.
+- `/perfil`: perfil.
+- `/admin`: painel gestor.
+- `/admin/units`: unidades.
+- `/admin/users`: equipe.
+- `/admin/specialties`: especialidades.
+- `/admin/patients`: pacientes.
+- `/admin/schedule`: agendamentos.
+- `/admin/reception`: recepcao e senhas.
+- `/admin/reports`: relatorios.
+- `/display-tv`: painel de chamada.
+
+Rotas antigas `/cadastro` e `/tv` redirecionam para as rotas canonicas.
+
+## Endpoints principais
+
+- `POST /api/auth/login`
+- `POST /api/auth/login-patient`
+- `POST /api/auth/register-patient`
+- `GET/POST/PATCH/DELETE /api/units`
+- `GET/POST/PATCH/DELETE /api/specialties`
+- `GET/POST/PATCH/DELETE /api/users`
+- `GET/POST/PATCH/DELETE /api/patients`
+- `GET/POST/PATCH /api/appointments`
+- `POST /api/appointments/:id/check-in`
+- `POST /api/appointments/:id/call`
+- `GET/POST /api/exams`
+- `GET /api/care-history`
+- `GET/PUT /api/reminders/preferences`
+- `GET/POST /api/notifications`
+- `POST /api/sync/cnes`
+- `POST /api/sync/cnes/professionals`
+
+## Seguranca
+
+- Segredos ficam apenas no backend.
+- `JWT_SECRET`, `DATABASE_URL` e `INITIAL_ADMIN_PASSWORD` nao usam prefixo `VITE_`.
+- CORS e Socket.IO usam `CORS_ORIGIN`.
+- O backend revalida criacao de agendamentos, conflito de horario, check-in e chamada.
+- Dados sensiveis de saude reais nao devem ser usados neste prototipo.
+
+## Limitacoes conhecidas
+
+- O backend ainda esta concentrado em `scripts/serve-dist.mjs`; regras novas foram extraidas para `server/domain`, mas controllers/repositories ainda podem ser modularizados.
+- Nao ha ESLint configurado; o script `lint` cobre a fronteira arquitetural exigida.
+- A sincronizacao CNES depende de rede externa e pode demorar.
+- O prototipo usa dados ficticios e nao implementa prontuario clinico.

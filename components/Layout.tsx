@@ -1,17 +1,43 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { User, UserRole, Notification } from '../types';
-import { api, apiOrigin } from '../services/api';
 import { io } from 'socket.io-client';
-import { LayoutDashboard, Calendar, Users, FileText, LogOut, Bell, UserPlus, MapPin, Building2, BookHeart, ListPlus, ChevronDown, Sun, Moon } from 'lucide-react';
-import logo from '@/src/assets/images/conectasaudeolinda.png';
+import {
+  Bell,
+  Building2,
+  Calendar,
+  ChevronDown,
+  FileText,
+  LayoutDashboard,
+  ListPlus,
+  LogOut,
+  MapPin,
+  MonitorPlay,
+  Moon,
+  Sun,
+  UserPlus,
+  Users,
+} from 'lucide-react';
+import { BrandLockup } from './BrandLockup';
 import { useTheme } from '../contexts/ThemeContext';
+import { api, apiOrigin } from '../services/api';
+import { Notification, User, UserRole } from '../types';
 
 interface LayoutProps {
   children: React.ReactNode;
   user: User;
   onLogout: () => void;
 }
+
+const menuItems = [
+  { label: 'Dashboard', path: '/admin', icon: LayoutDashboard, roles: [UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR, UserRole.ATTENDANT, UserRole.DOCTOR, UserRole.SOCIAL_WORKER] },
+  { label: 'Unidades', path: '/admin/units', icon: Building2, roles: [UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR] },
+  { label: 'Equipe', path: '/admin/users', icon: UserPlus, roles: [UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR] },
+  { label: 'Especialidades', path: '/admin/specialties', icon: ListPlus, roles: [UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR] },
+  { label: 'Pacientes', path: '/admin/patients', icon: Users, roles: [UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR, UserRole.ATTENDANT, UserRole.SOCIAL_WORKER] },
+  { label: 'Agendamentos', path: '/admin/schedule', icon: Calendar, roles: [UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR, UserRole.ATTENDANT, UserRole.DOCTOR] },
+  { label: 'Recepcao e Senhas', path: '/admin/reception', icon: MonitorPlay, roles: [UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR, UserRole.ATTENDANT] },
+  { label: 'Relatorios', path: '/admin/reports', icon: FileText, roles: [UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR] },
+];
 
 export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   const navigate = useNavigate();
@@ -23,35 +49,33 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   const { theme, setTheme } = useTheme();
 
   useEffect(() => {
-    // Get Unit Info
     const loadUnit = async () => {
-      const unit = await api.units.getById(user.unitId);
-      if (unit) {
-        setUnitName(unit.name);
-      } else {
-        setUnitName('Unidade Desconhecida');
+      if (!user.unitId) {
+        setUnitName('Rede municipal');
+        return;
       }
+      const unit = await api.units.getById(user.unitId);
+      setUnitName(unit?.name || 'Rede municipal');
     };
-    loadUnit();
 
-    // Get initial notifications and setup WebSocket
     const checkNotifs = async () => {
       try {
         const notifs = await api.notifications.getForUser();
         setNotifications(Array.isArray(notifs) ? notifs : []);
-      } catch (err) {
-        console.error('Failed to fetch notifications:', err);
+      } catch {
+        setNotifications([]);
       }
     };
+
+    loadUnit();
     checkNotifs();
-    
+
     const socket = io(apiOrigin);
     socket.emit('join', user.id);
-    
     socket.on('new_notification', (notif: Notification) => {
       setNotifications(prev => [notif, ...prev]);
     });
-    
+
     return () => {
       socket.disconnect();
     };
@@ -59,24 +83,8 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
 
   const handleRead = (id: string) => {
     api.notifications.markAsRead(id);
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    setNotifications(prev => prev.map(notification => notification.id === id ? { ...notification, read: true } : notification));
   };
-
-  const unreadCount = notifications.filter(n => !n.read).length;
-
-  const menuItems = [
-    { label: 'Dashboard', path: '/admin', icon: LayoutDashboard, roles: [UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR, UserRole.ATTENDANT, UserRole.DOCTOR, UserRole.SOCIAL_WORKER] },
-    { label: 'Início', path: '/', icon: BookHeart, roles: [UserRole.PATIENT] },
-    { label: 'Agendamento de Consulta', path: '/patient-schedule', icon: Calendar, roles: [UserRole.PATIENT] },
-    { label: 'Unidades', path: '/admin/units', icon: Building2, roles: [UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR] },
-    { label: 'Equipe', path: '/admin/users', icon: UserPlus, roles: [UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR] },
-    { label: 'Especialidades', path: '/admin/specialties', icon: ListPlus, roles: [UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR] },
-    { label: 'Pacientes', path: '/admin/patients', icon: Users, roles: [UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR, UserRole.ATTENDANT, UserRole.SOCIAL_WORKER] },
-    { label: 'Agendamentos', path: '/admin/schedule', icon: Calendar, roles: [UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR, UserRole.ATTENDANT, UserRole.DOCTOR] },
-    { label: 'Assistência Social', path: '/admin/social-assistance', icon: Users, roles: [UserRole.ADMIN, UserRole.SOCIAL_WORKER] }, // Added for Social Worker
-    { label: 'Recepção e Senhas', path: '/admin/reception', icon: LayoutDashboard, roles: [UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR, UserRole.ATTENDANT] },
-    { label: 'Relatórios', path: '/admin/reports', icon: FileText, roles: [UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR] },
-  ];
 
   const getInitials = (name: string) => {
     const parts = name.split(' ');
@@ -84,138 +92,130 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
     return name.substring(0, 2).toUpperCase();
   };
 
+  const unreadCount = notifications.filter(notification => !notification.read).length;
+
   return (
-    <div className="flex h-screen bg-ita-background text-slate-800">
-      {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col z-20 shadow-sm">
-        <div className="p-6 border-b border-slate-100 flex flex-col items-center">
-          <img src={logo} alt="Conecta Saúde Olinda" className="w-40 h-auto" />
+    <div className="flex h-screen bg-[#F7FBFF] text-[#10223F]">
+      <aside className="z-20 flex w-64 shrink-0 flex-col border-r border-[#D9E6F5] bg-white shadow-sm">
+        <div className="flex flex-col items-center border-b border-[#D9E6F5] p-6">
+          <BrandLockup compact />
         </div>
 
-        {/* User Info (For Patient or Admin depending on role) */}
-        {user.role === UserRole.PATIENT ? null : (
-          <div className="px-6 py-4 bg-slate-50 border-b border-slate-100">
-            <div className="flex items-center gap-2 text-slate-700">
-              <MapPin className="w-4 h-4 text-ita-red" />
-              <span className="text-xs font-bold uppercase tracking-wide truncate" title={unitName}>{unitName}</span>
-            </div>
+        <div className="border-b border-[#D9E6F5] bg-[#F7FBFF] px-6 py-4">
+          <div className="flex items-center gap-2 text-[#5F708A]">
+            <MapPin className="h-4 w-4 text-[#D51F2A]" />
+            <span className="truncate text-xs font-black uppercase" title={unitName}>{unitName}</span>
           </div>
-        )}
+        </div>
 
-        <div className="p-4 flex flex-col gap-1 flex-1 overflow-y-auto">
-          {menuItems.filter(item => item.roles.includes(user.role)).map((item) => (
+        <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-4">
+          {menuItems.filter(item => item.roles.includes(user.role)).map(item => (
             <button
               key={item.path}
               onClick={() => navigate(item.path)}
-              className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-semibold transition-colors ${
+              className={`flex h-12 items-center gap-3 rounded-xl px-4 text-sm font-black transition-colors ${
                 location.pathname === item.path
-                  ? 'bg-primary text-white shadow-md'
-                  : 'text-slate-500 hover:bg-slate-50 hover:text-primary'
+                  ? 'bg-[#0B60C9] text-white shadow-[0_8px_20px_rgba(6,41,111,0.12)]'
+                  : 'text-[#5F708A] hover:bg-[#F1F7FD] hover:text-[#0B60C9]'
               }`}
+              type="button"
             >
-              <item.icon className={`w-5 h-5 ${location.pathname === item.path ? 'text-white' : 'text-slate-400'}`} />
+              <item.icon className="h-5 w-5" />
               {item.label}
             </button>
           ))}
-        </div>
+        </nav>
 
-        {/* Ajuda / Suporte na Sidebar (Mockup) */}
-        <div className="p-6 m-4 bg-ita-background rounded-xl flex flex-col gap-2">
-            <span className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                <div className="w-6 h-6 rounded-full bg-white flex items-center justify-center">🎧</div>
-                Precisa de ajuda?
-            </span>
-            <span className="text-xs text-slate-500">Acesse o suporte técnico ou consulte o manual do sistema.</span>
-            <button className="text-primary text-xs font-bold text-left mt-1 hover:underline">Abrir suporte →</button>
+        <div className="m-4 rounded-2xl bg-[#EAF6FF] p-5">
+          <p className="text-sm font-black text-[#10223F]">Precisa de ajuda?</p>
+          <p className="mt-1 text-xs font-semibold text-[#5F708A]">Acesse suporte tecnico do Conecta Saude Olinda.</p>
+          <a href="mailto:conectasaude@olinda.pe.gov.br" className="mt-3 inline-flex text-xs font-black text-[#0B60C9] hover:underline">
+            Abrir suporte
+          </a>
         </div>
-
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col h-screen overflow-hidden dark:bg-slate-900 bg-background">
-        {/* Header */}
-        <header className="h-16 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 flex items-center justify-end px-8 gap-4 shadow-sm z-10">
-           
-           {/* Theme Toggle */}
-           <button
-             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-             className="p-2 text-slate-400 hover:text-primary dark:hover:text-primary hover:bg-slate-50 dark:hover:bg-slate-800 rounded-full transition-all"
-             title={theme === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
-           >
-             {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-           </button>
+      <main className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden bg-[#F7FBFF] dark:bg-slate-900">
+        <header className="z-10 flex h-16 items-center justify-end gap-4 border-b border-[#D9E6F5] bg-white px-8 shadow-sm dark:border-slate-800 dark:bg-slate-950">
+          <button
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            className="flex h-10 w-10 items-center justify-center rounded-xl text-[#5F708A] transition-colors hover:bg-[#F1F7FD] hover:text-[#0B60C9] dark:hover:bg-slate-800"
+            title={theme === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
+            type="button"
+          >
+            {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+          </button>
 
-           {/* Notifications */}
-           <div className="relative">
-              <button 
-                onClick={() => setShowNotifMenu(!showNotifMenu)}
-                className="p-2 text-slate-400 hover:text-primary hover:bg-slate-50 rounded-full transition-all relative"
-              >
-                <Bell className="w-5 h-5" />
-                {unreadCount > 0 && (
-                  <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-ita-red rounded-full border-2 border-white"></span>
-                )}
-              </button>
+          <div className="relative">
+            <button
+              onClick={() => setShowNotifMenu(!showNotifMenu)}
+              className="relative flex h-10 w-10 items-center justify-center rounded-xl text-[#5F708A] transition-colors hover:bg-[#F1F7FD] hover:text-[#0B60C9]"
+              type="button"
+              aria-label="Abrir notificacoes"
+            >
+              <Bell className="h-5 w-5" />
+              {unreadCount > 0 && <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full border-2 border-white bg-[#D51F2A]" />}
+            </button>
 
-              {showNotifMenu && (
-                <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-lg border border-slate-100 z-50 overflow-hidden">
-                   <div className="p-3 bg-slate-50 border-b border-slate-100 font-semibold text-slate-700 text-sm">Notificações</div>
-                   <div className="max-h-64 overflow-y-auto">
-                     {notifications.length === 0 ? (
-                       <div className="p-4 text-center text-slate-400 text-sm">Nenhuma notificação nova.</div>
-                     ) : (
-                       notifications.map(n => (
-                         <div 
-                           key={n.id} 
-                           onClick={() => handleRead(n.id)}
-                           className={`p-3 border-b border-slate-50 hover:bg-slate-50 cursor-pointer ${!n.read ? 'bg-blue-50/50' : ''}`}
-                         >
-                            <p className={`text-sm ${!n.read ? 'font-semibold text-slate-800' : 'text-slate-600'}`}>{n.message}</p>
-                            <span className="text-[10px] text-slate-400">{new Date(n.createdAt).toLocaleTimeString()} - {new Date(n.createdAt).toLocaleDateString()}</span>
-                         </div>
-                       ))
-                     )}
-                   </div>
+            {showNotifMenu && (
+              <div className="absolute right-0 z-50 mt-2 w-80 overflow-hidden rounded-2xl border border-[#D9E6F5] bg-white shadow-[0_24px_64px_rgba(6,41,111,0.16)]">
+                <div className="border-b border-[#D9E6F5] bg-[#F7FBFF] p-3 text-sm font-black text-[#10223F]">Notificacoes</div>
+                <div className="max-h-72 overflow-y-auto">
+                  {notifications.length === 0 ? (
+                    <div className="p-4 text-center text-sm font-semibold text-[#5F708A]">Nenhuma notificacao nova.</div>
+                  ) : (
+                    notifications.map(notification => (
+                      <button
+                        key={notification.id}
+                        onClick={() => handleRead(notification.id)}
+                        className={`block w-full border-b border-[#F1F7FD] p-3 text-left hover:bg-[#F7FBFF] ${!notification.read ? 'bg-[#DFF0FF]/50' : ''}`}
+                        type="button"
+                      >
+                        <p className={`text-sm ${!notification.read ? 'font-black text-[#10223F]' : 'font-semibold text-[#5F708A]'}`}>{notification.message}</p>
+                        <span className="text-[10px] font-bold text-[#8A99AD]">{new Date(notification.createdAt).toLocaleString('pt-BR')}</span>
+                      </button>
+                    ))
+                  )}
                 </div>
-              )}
-           </div>
-
-           {/* User Profile */}
-           <div className="relative border-l border-slate-200 pl-6 flex items-center gap-3 cursor-pointer" onClick={() => setShowProfileMenu(!showProfileMenu)}>
-              <div className="w-10 h-10 rounded-full bg-primary-dark flex items-center justify-center text-white font-bold text-sm">
-                 {getInitials(user.name)}
               </div>
-              <div className="flex flex-col">
-                <span className="text-sm font-bold text-slate-800">{user.name}</span>
-                <span className="text-xs text-slate-500">
-                    {user.role === UserRole.PATIENT ? `Cartão SUS: ${user.susNumber || 'Não informado'}` : (user.role === UserRole.ADMIN ? 'Administrador' : 'Profissional de Saúde')}
-                </span>
-              </div>
-              <ChevronDown className="w-4 h-4 text-slate-400 ml-2" />
+            )}
+          </div>
 
-              {showProfileMenu && (
-                  <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-100 overflow-hidden z-50">
-                      <button 
-                        onClick={() => { setShowProfileMenu(false); navigate('/perfil'); }}
-                        className="w-full text-left px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 font-medium flex items-center gap-2 border-b border-slate-100"
-                      >
-                          <UserPlus className="w-4 h-4" />
-                          Meu Perfil
-                      </button>
-                      <button 
-                        onClick={onLogout}
-                        className="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 font-medium flex items-center gap-2"
-                      >
-                          <LogOut className="w-4 h-4" />
-                          Sair do Sistema
-                      </button>
-                  </div>
-              )}
-           </div>
+          <div className="relative flex cursor-pointer items-center gap-3 border-l border-[#D9E6F5] pl-6" onClick={() => setShowProfileMenu(!showProfileMenu)}>
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#06296F] text-sm font-black text-white">
+              {getInitials(user.name)}
+            </div>
+            <div className="flex flex-col">
+              <span className="text-sm font-black text-[#10223F] dark:text-slate-100">{user.name}</span>
+              <span className="text-xs font-semibold text-[#5F708A]">{user.role === UserRole.ADMIN ? 'Gestor' : 'Profissional de saude'}</span>
+            </div>
+            <ChevronDown className="ml-1 h-4 w-4 text-[#8A99AD]" />
+
+            {showProfileMenu && (
+              <div className="absolute right-0 top-full z-50 mt-2 w-52 overflow-hidden rounded-2xl border border-[#D9E6F5] bg-white shadow-[0_16px_36px_rgba(6,41,111,0.12)]">
+                <button
+                  onClick={() => { setShowProfileMenu(false); navigate('/perfil'); }}
+                  className="flex w-full items-center gap-2 border-b border-[#F1F7FD] px-4 py-3 text-left text-sm font-black text-[#10223F] hover:bg-[#F7FBFF]"
+                  type="button"
+                >
+                  <UserPlus className="h-4 w-4" />
+                  Meu Perfil
+                </button>
+                <button
+                  onClick={onLogout}
+                  className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-black text-[#D51F2A] hover:bg-[#FFE6E8]"
+                  type="button"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Sair do Sistema
+                </button>
+              </div>
+            )}
+          </div>
         </header>
 
-        <div className="flex-1 overflow-auto bg-ita-background p-8">
-          <div className="max-w-[1400px] mx-auto">
+        <div className="flex-1 overflow-auto p-8">
+          <div className="mx-auto max-w-[1400px]">
             {children}
           </div>
         </div>

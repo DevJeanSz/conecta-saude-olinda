@@ -43,22 +43,12 @@ export const Reception: React.FC<ReceptionProps> = ({ user }) => {
   }, [user?.unitId]);
 
   const generatePassword = async (apptId: string, isPreferential: boolean) => {
-    // Basic logic to generate next password based on existing today
-    const existing = appointments.filter(a => a.queuePassword && a.date === today);
-    const prefix = isPreferential ? 'P' : 'G';
-    const count = existing.filter(a => a.queuePassword?.startsWith(prefix)).length + 1;
-    const password = `${prefix}-${count.toString().padStart(3, '0')}`;
-
-    await api.appointments.update(apptId, { 
-        queuePassword: password,
-        checkInTime: new Date().toISOString()
-    });
-    
+    await api.appointments.checkIn(apptId, isPreferential);
     loadData();
   };
 
   const callToTV = async (apptId: string) => {
-    await api.appointments.update(apptId, { calledAt: new Date().toISOString() });
+    await api.appointments.call(apptId);
     loadData();
   };
 
@@ -79,7 +69,7 @@ export const Reception: React.FC<ReceptionProps> = ({ user }) => {
         </div>
         {isSenhaMode && (
           <button 
-            onClick={() => window.open('/tv', '_blank')}
+            onClick={() => window.open('/display-tv', '_blank')}
             className="flex items-center gap-2 bg-slate-800 dark:bg-slate-700 text-white px-4 py-2 rounded-lg hover:bg-slate-900 transition-colors"
           >
             <MonitorPlay className="w-5 h-5" />
