@@ -13,8 +13,8 @@ import {
   User as UserIcon,
   UserPlus,
 } from 'lucide-react';
-import prefeituraLogo from '@/src/assets/images/prefeitura-olinda.png';
-import olindaOrla from '@/src/assets/images/olinda-orla.png';
+import prefeituraLogo from '@/src/assets/images/prefeitura-olinda-oficial.svg';
+import olindaOrla from '@/src/assets/images/olinda-hero-conecta-saude.svg';
 import { BrandLockup } from '../components/BrandLockup';
 
 interface LoginProps {

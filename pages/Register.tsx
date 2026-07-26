@@ -20,7 +20,7 @@ import {
   User as UserIcon,
   UserPlus,
 } from 'lucide-react';
-import prefeituraLogo from '@/src/assets/images/prefeitura-olinda.png';
+import prefeituraLogo from '@/src/assets/images/prefeitura-olinda-oficial.svg';
 import { BrandLockup } from '../components/BrandLockup';
 
 const steps = [

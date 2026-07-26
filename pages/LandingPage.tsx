@@ -15,7 +15,8 @@ import {
   Smartphone,
   Users,
 } from 'lucide-react';
-import prefeituraLogo from '@/src/assets/images/prefeitura-olinda.png';
+import prefeituraLogo from '@/src/assets/images/prefeitura-olinda-oficial.svg';
+import olindaHero from '@/src/assets/images/olinda-hero-conecta-saude.svg';
 import { BrandLockup } from '../components/BrandLockup';
 
 const mainBenefits = [
@@ -126,7 +127,10 @@ export const LandingPage: React.FC = () => {
 
       <main>
         <section id="projeto" className="relative overflow-hidden border-b border-slate-200">
-          <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1586773860418-d37222d8fce3?q=80&w=2200&auto=format&fit=crop')] bg-cover bg-center opacity-10" />
+          <div
+            className="absolute inset-0 bg-cover bg-center opacity-20"
+            style={{ backgroundImage: `url(${olindaHero})` }}
+          />
           <div className="absolute inset-x-0 bottom-0 h-3 flex">
             <div className="flex-1 bg-primary" />
             <div className="flex-1 bg-green-500" />
