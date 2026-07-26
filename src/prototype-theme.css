@@ -1241,6 +1241,10 @@ button {
   box-shadow: 0 0 0 2px rgba(11, 96, 201, 0.08);
 }
 
+.unit-options > label.unit-locked {
+  cursor: default;
+}
+
 .unit-options input {
   opacity: 0;
   pointer-events: none;
@@ -1298,6 +1302,16 @@ button {
   font-size: 11px;
   gap: 8px;
   padding: 11px 13px;
+}
+
+.selection-note-success {
+  background: #e7f8ef;
+  color: #075c35;
+}
+
+.selection-note-warning {
+  background: #fff4de;
+  color: #7a4b00;
 }
 
 .register-actions {
@@ -3939,10 +3953,6 @@ button {
   color: var(--text-muted);
   font-size: 10px;
   font-weight: 800;
-}
-
-.register-rg-grid {
-  margin-bottom: 14px;
 }
 
 .tv-empty-calls {

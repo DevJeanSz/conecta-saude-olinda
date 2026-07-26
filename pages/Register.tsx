@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import { HealthUnit } from '../types';
+import { MOCK_UNITS } from '../constants';
 import {
   ArrowLeft,
   BadgeCheck,
@@ -30,6 +31,66 @@ const registerStepContent = [
   },
 ];
 
+type RegisterAddressDetails = {
+  street: string;
+  neighborhood: string;
+  city: string;
+  state: string;
+  number: string;
+  complement: string;
+};
+
+const normalizeDigits = (value = '') => value.replace(/\D/g, '');
+
+const normalizeText = (value = '') =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('pt-BR')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const resolveReferenceUnit = (
+  units: HealthUnit[],
+  cep: string,
+  addressDetails: RegisterAddressDetails,
+) => {
+  const cepDigits = normalizeDigits(cep);
+  if (!units.length || cepDigits.length !== 8) return null;
+
+  const exactCepMatch = units.find((unit) => normalizeDigits(unit.cep || '') === cepDigits);
+  if (exactCepMatch) return exactCepMatch;
+
+  const patientNeighborhood = normalizeText(addressDetails.neighborhood);
+  const patientCity = normalizeText(addressDetails.city);
+  const unitsInSameCity = units.filter((unit) => {
+    const unitCity = normalizeText(unit.city);
+    return !patientCity || !unitCity || patientCity.includes(unitCity) || unitCity.includes(patientCity);
+  });
+
+  if (patientNeighborhood) {
+    const neighborhoodMatch = unitsInSameCity.find((unit) => {
+      const unitNeighborhood = normalizeText(unit.neighborhood);
+      const unitAddress = normalizeText(unit.address);
+      return unitNeighborhood === patientNeighborhood || unitAddress.includes(patientNeighborhood);
+    });
+
+    if (neighborhoodMatch) return neighborhoodMatch;
+  }
+
+  return null;
+};
+
+const getUnitAddress = (unit: HealthUnit) =>
+  [
+    unit.address,
+    unit.addressNumber,
+    unit.neighborhood,
+    unit.city || 'Olinda',
+    unit.state,
+  ].filter(Boolean).join(', ');
+
 export const Register: React.FC = () => {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(0);
@@ -39,7 +100,6 @@ export const Register: React.FC = () => {
 
   const [formData, setFormData] = useState({
     name: '',
-    rg: '',
     cpf: '',
     susNumber: '',
     birthDate: '',
@@ -59,14 +119,23 @@ export const Register: React.FC = () => {
   });
 
   useEffect(() => {
-    api.units.getAll()
-      .then((availableUnits) => {
-        setUnits(availableUnits);
-        if (availableUnits.length === 1) {
-          setFormData(prev => ({ ...prev, unitId: availableUnits[0].id }));
-        }
-      })
-      .catch(() => setUnits([]));
+    let isMounted = true;
+
+    const loadUnits = async () => {
+      const shouldUseLocalUnits = import.meta.env.DEV && !import.meta.env.VITE_API_URL;
+      const availableUnits = shouldUseLocalUnits ? MOCK_UNITS : await api.units.getAll();
+      const safeUnits = availableUnits.length > 0 ? availableUnits : MOCK_UNITS;
+
+      if (isMounted) {
+        setUnits(safeUnits);
+      }
+    };
+
+    loadUnits();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const isValidCPF = (cpf: string) => {
@@ -101,14 +170,6 @@ export const Register: React.FC = () => {
     setFormData(prev => ({ ...prev, cpf: value }));
   };
 
-  const handleRgChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let value = e.target.value.replace(/[^0-9xX]/g, '').toUpperCase().slice(0, 9);
-    value = value.replace(/(\d{2})(\d)/, '$1.$2');
-    value = value.replace(/(\d{3})(\d)/, '$1.$2');
-    value = value.replace(/(\d{3})([0-9X])$/, '$1-$2');
-    setFormData(prev => ({ ...prev, rg: value }));
-  };
-
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.replace(/\D/g, '').slice(0, 11);
     let formatted = value;
@@ -129,7 +190,7 @@ export const Register: React.FC = () => {
   const handleCepChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const cep = e.target.value.replace(/\D/g, '').slice(0, 8);
     const formattedCep = cep.length > 5 ? `${cep.slice(0, 5)}-${cep.slice(5)}` : cep;
-    setFormData(prev => ({ ...prev, cep: formattedCep }));
+    setFormData(prev => ({ ...prev, cep: formattedCep, unitId: '' }));
 
     if (cep.length === 8) {
       try {
@@ -152,7 +213,23 @@ export const Register: React.FC = () => {
 
   const updateAddressDetails = (field: keyof typeof addressDetails, value: string) => {
     setAddressDetails(prev => ({ ...prev, [field]: value }));
+    setFormData(prev => ({ ...prev, unitId: '' }));
   };
+
+  const referenceUnit = useMemo(
+    () => resolveReferenceUnit(units, formData.cep, addressDetails),
+    [addressDetails, formData.cep, units],
+  );
+
+  const referenceUnitId = referenceUnit?.id || '';
+  const selectedUnitId = referenceUnitId || formData.unitId;
+  const canChooseUnitManually = formData.cep.replace(/\D/g, '').length === 8 && !referenceUnit && units.length > 0;
+  const displayedUnits = referenceUnit ? [referenceUnit] : units;
+
+  useEffect(() => {
+    if (!referenceUnitId) return;
+    setFormData(prev => prev.unitId === referenceUnitId ? prev : { ...prev, unitId: referenceUnitId });
+  }, [referenceUnitId]);
 
   const validateStep = (stepIndex: number) => {
     setError('');
@@ -182,12 +259,7 @@ export const Register: React.FC = () => {
     }
 
     if (stepIndex === 2) {
-      if (formData.rg && formData.rg.replace(/[^0-9X]/gi, '').length < 5) {
-        setError('RG inválido. Verifique o número digitado.');
-        return false;
-      }
-
-      if (!formData.unitId) {
+      if (!selectedUnitId) {
         setError('Selecione a unidade de referência.');
         return false;
       }
@@ -219,13 +291,11 @@ export const Register: React.FC = () => {
       `Bairro: ${addressDetails.neighborhood}`,
       `${addressDetails.city} - ${addressDetails.state}`,
       `CEP: ${formData.cep}`,
-      formData.rg ? `RG: ${formData.rg}` : '',
     ].filter(Boolean).join('. ');
 
     try {
       const response = await api.auth.registerPatient({
         name: formData.name,
-        rg: formData.rg,
         cpf: formData.cpf,
         birthDate: formData.birthDate,
         address: fullAddress,
@@ -233,7 +303,7 @@ export const Register: React.FC = () => {
         phone: formData.phone,
         susNumber: formData.susNumber,
         email: formData.email,
-        unitId: formData.unitId,
+        unitId: selectedUnitId,
       });
 
       if (response) {
@@ -355,27 +425,31 @@ export const Register: React.FC = () => {
           )}
 
           {currentStep === 2 && (
-            <>
-              <div className="form-grid register-rg-grid">
-                <label className="field-full">
-                  RG opcional
-                  <input maxLength={12} onChange={handleRgChange} placeholder="00.000.000-0" value={formData.rg} />
-                </label>
-              </div>
-
-              <div className="unit-options">
-                {units.length === 0 ? (
-                  <div className="selection-note">
-                    <Info size={17} />
-                    Nenhuma unidade disponível no momento. Tente novamente mais tarde.
+            <div className="unit-options">
+              {units.length === 0 ? (
+                <div className="selection-note">
+                  <Info size={17} />
+                  Nenhuma unidade disponível no momento. Tente novamente mais tarde.
+                </div>
+              ) : (
+                <>
+                  <div className={`selection-note ${referenceUnit ? 'selection-note-success' : 'selection-note-warning'}`}>
+                    {referenceUnit ? <BadgeCheck size={17} /> : <Info size={17} />}
+                    {referenceUnit
+                      ? 'Unidade definida automaticamente a partir do CEP informado.'
+                      : 'Não encontramos uma unidade única para este CEP. Escolha a unidade de referência abaixo.'}
                   </div>
-                ) : (
-                  units.map((unit, index) => (
-                    <label key={unit.id}>
+
+                  {displayedUnits.map((unit) => (
+                    <label className={referenceUnit ? 'unit-locked' : ''} key={unit.id}>
                       <input
-                        checked={formData.unitId === unit.id}
+                        checked={selectedUnitId === unit.id}
                         name="unit"
-                        onChange={() => setFormData({ ...formData, unitId: unit.id })}
+                        onChange={() => {
+                          if (!canChooseUnitManually) return;
+                          setFormData({ ...formData, unitId: unit.id });
+                        }}
+                        readOnly={!canChooseUnitManually}
                         type="radio"
                       />
                       <span className="unit-radio" />
@@ -384,18 +458,19 @@ export const Register: React.FC = () => {
                       </span>
                       <span>
                         <strong>{unit.name}</strong>
-                        <small>{unit.address || 'Unidade municipal de referência'}</small>
+                        <small>{getUnitAddress(unit) || 'Unidade municipal de referência'}</small>
                       </span>
-                      {index === 0 && <BadgeCheck className="recommended-icon" size={20} />}
+                      {referenceUnit && <BadgeCheck className="recommended-icon" size={20} />}
                     </label>
-                  ))
-                )}
-                <div className="selection-note">
-                  <Info size={17} />
-                  A unidade será vinculada ao seu cadastro para facilitar agendamentos e atendimentos.
-                </div>
+                  ))}
+                </>
+              )}
+
+              <div className="selection-note">
+                <Info size={17} />
+                A unidade será vinculada ao seu cadastro para facilitar agendamentos e atendimentos.
               </div>
-            </>
+            </div>
           )}
 
           {error && (

@@ -158,7 +158,7 @@ export const api = {
         return null;
       }
     },
-    registerPatient: async (payload: { name: string, rg: string, cpf: string, birthDate: string, address: string, cep: string, phone: string, susNumber: string, email: string, unitId: string }) => {
+    registerPatient: async (payload: { name: string, rg?: string, cpf: string, birthDate: string, address: string, cep: string, phone: string, susNumber: string, email: string, unitId: string }) => {
       try {
         const data = await request<{ token?: string; user: AuthUser; unit: HealthUnit }>('/auth/register-patient', {
           method: 'POST',

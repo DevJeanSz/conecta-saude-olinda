@@ -1,9 +1,66 @@
 import { User, UserRole, Patient, Appointment, AppointmentStatus, HealthUnit, Specialty } from './types';
 
 export const MOCK_UNITS: HealthUnit[] = [
-  { id: '1', name: 'PSF Camboã', address: 'Rua do Sol, 100 - Camboã', phone: '(11) 3333-0000' },
-  { id: '2', name: 'PSF Grêmio', address: 'Av. Esportiva, 50 - Grêmio', phone: '(11) 3333-1111' },
-  { id: '3', name: 'PSF Cajueiro', address: 'Estrada do Caju, 200 - Cajueiro', phone: '(11) 3333-2222' }
+  {
+    id: 'olinda-rio-doce',
+    name: 'USF Rio Doce',
+    address: 'Rio Doce, Olinda - PE',
+    neighborhood: 'Rio Doce',
+    city: 'Olinda',
+    state: 'PE',
+    phone: '(81) 0000-0000',
+    attendanceType: 'CHEGADA'
+  },
+  {
+    id: 'olinda-peixinhos',
+    name: 'USF Peixinhos',
+    address: 'Peixinhos, Olinda - PE',
+    neighborhood: 'Peixinhos',
+    city: 'Olinda',
+    state: 'PE',
+    phone: '(81) 0000-0000',
+    attendanceType: 'CHEGADA'
+  },
+  {
+    id: 'olinda-bairro-novo',
+    name: 'USF Bairro Novo',
+    address: 'Bairro Novo, Olinda - PE',
+    neighborhood: 'Bairro Novo',
+    city: 'Olinda',
+    state: 'PE',
+    phone: '(81) 0000-0000',
+    attendanceType: 'CHEGADA'
+  },
+  {
+    id: 'olinda-jardim-brasil',
+    name: 'USF Jardim Brasil',
+    address: 'Jardim Brasil, Olinda - PE',
+    neighborhood: 'Jardim Brasil',
+    city: 'Olinda',
+    state: 'PE',
+    phone: '(81) 0000-0000',
+    attendanceType: 'CHEGADA'
+  },
+  {
+    id: 'olinda-aguazinha',
+    name: 'USF Aguazinha',
+    address: 'Aguazinha, Olinda - PE',
+    neighborhood: 'Aguazinha',
+    city: 'Olinda',
+    state: 'PE',
+    phone: '(81) 0000-0000',
+    attendanceType: 'CHEGADA'
+  },
+  {
+    id: 'olinda-casa-caiada',
+    name: 'USF Casa Caiada',
+    address: 'Casa Caiada, Olinda - PE',
+    neighborhood: 'Casa Caiada',
+    city: 'Olinda',
+    state: 'PE',
+    phone: '(81) 0000-0000',
+    attendanceType: 'CHEGADA'
+  }
 ];
 
 export const MOCK_SPECIALTIES: Specialty[] = [
