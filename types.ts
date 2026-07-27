@@ -130,6 +130,7 @@ export interface ExamType {
   maxDailyAppointments?: number;
   isGlobal?: boolean;
   unitIds?: string[];
+  preparation?: string;
 }
 
 export interface Notification {
@@ -224,6 +225,7 @@ export interface Exam {
   status: ExamStatus;
   preparation?: string;
   resultAvailable?: boolean;
+  notes?: string;
 }
 
 export interface CareHistoryItem {

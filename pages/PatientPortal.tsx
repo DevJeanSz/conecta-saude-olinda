@@ -351,6 +351,40 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ user }) => {
     }
   };
 
+  const handleCancelAppointment = async (appointment: Appointment) => {
+    const apptDateStr = typeof appointment.date === 'string' ? appointment.date.split('T')[0] : String(appointment.date).split('T')[0];
+    const apptDateTime = new Date(`${apptDateStr}T${appointment.time}:00`);
+    const now = new Date();
+    const diffMs = apptDateTime.getTime() - now.getTime();
+    const diffHours = diffMs / (1000 * 60 * 60);
+
+    if (diffHours < 8) {
+      setFeedback({ type: 'error', message: 'O cancelamento e permitido apenas com no minimo 8 horas de antecedencia.' });
+      return;
+    }
+
+    if (!window.confirm('Tem certeza que deseja cancelar este agendamento?')) {
+      return;
+    }
+
+    setLoading(true);
+    setFeedback(null);
+
+    try {
+      const updated = await api.appointments.cancel(appointment.id, 'Cancelado pelo Portal do Paciente');
+      if (updated) {
+        setFeedback({ type: 'success', message: 'Agendamento cancelado com sucesso.' });
+        await loadAppointments(patient);
+      } else {
+        setFeedback({ type: 'error', message: 'Falha ao cancelar o agendamento.' });
+      }
+    } catch {
+      setFeedback({ type: 'error', message: 'Ocorreu um erro ao cancelar. Tente novamente mais tarde.' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <div>
@@ -569,6 +603,29 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ user }) => {
                         <MapPin className="h-4 w-4 text-ita-red" />
                         {unitNameById.get(appointment.unitId) || 'Unidade vinculada'}
                       </div>
+                      
+                      {appointment.status === AppointmentStatus.SCHEDULED && (() => {
+                        const apptDateStr = typeof appointment.date === 'string' ? appointment.date.split('T')[0] : String(appointment.date).split('T')[0];
+                        const apptDateTime = new Date(`${apptDateStr}T${appointment.time}:00`);
+                        const isCancelable = (apptDateTime.getTime() - new Date().getTime()) / (1000 * 60 * 60) >= 8;
+                        
+                        return (
+                          <div className="mt-2 flex justify-end">
+                            <button
+                              onClick={() => handleCancelAppointment(appointment)}
+                              disabled={!isCancelable}
+                              className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-all ${
+                                isCancelable
+                                  ? 'bg-red-50 text-red-600 hover:bg-red-100'
+                                  : 'cursor-not-allowed bg-slate-100 text-slate-400'
+                              }`}
+                              title={!isCancelable ? "Cancelamento so e permitido com 8 horas de antecedencia" : "Cancelar agendamento"}
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>

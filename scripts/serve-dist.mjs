@@ -224,7 +224,7 @@ const mapAppointment = row => ({
   patientId: row.patient_id,
   doctorId: row.doctor_id,
   unitId: row.unit_id,
-  date: row.date,
+  date: row.date instanceof Date ? row.date.toISOString().split('T')[0] : (typeof row.date === 'string' ? row.date.split('T')[0] : row.date),
   time: row.time,
   status: row.status,
   notes: row.notes ?? undefined,
@@ -240,7 +240,7 @@ const mapExam = row => ({
   unitId: row.unit_id,
   type: row.type,
   requestCode: row.request_code ?? undefined,
-  date: row.date,
+  date: row.date instanceof Date ? row.date.toISOString().split('T')[0] : (typeof row.date === 'string' ? row.date.split('T')[0] : row.date),
   time: row.time,
   status: row.status,
   preparation: row.preparation ?? undefined,
@@ -811,7 +811,7 @@ app.post('/api/auth/register-patient', async (req, res, next) => {
 
 app.get('/api/units', async (_req, res, next) => {
   try {
-    const { rows } = await pool.query('SELECT * FROM units ORDER BY name');
+    const { rows } = await pool.query("SELECT * FROM units WHERE esfera_administrativa != 'Privada' OR esfera_administrativa IS NULL ORDER BY name");
     res.json(rows.map(mapUnit));
   } catch (error) {
     next(error);
@@ -979,7 +979,8 @@ const mapExamType = row => ({
   schedule: row.schedule ?? [],
   maxDailyAppointments: row.max_daily_appointments ?? undefined,
   isGlobal: row.is_global ?? true,
-  unitIds: row.unit_ids ? (typeof row.unit_ids === 'string' ? JSON.parse(row.unit_ids) : row.unit_ids) : []
+  unitIds: row.unit_ids ? (typeof row.unit_ids === 'string' ? JSON.parse(row.unit_ids) : row.unit_ids) : [],
+  preparation: row.preparation ?? undefined
 });
 
 app.get('/api/exam-types', async (_req, res, next) => {
@@ -998,10 +999,11 @@ app.post('/api/exam-types', authenticate, authorize('ADMIN', 'GENERAL_SUPERVISOR
     const maxDailyAppointments = req.body.maxDailyAppointments || null;
     const isGlobal = req.body.isGlobal ?? true;
     const unitIds = req.body.unitIds ? JSON.stringify(req.body.unitIds) : '[]';
+    const preparation = req.body.preparation || null;
     
     const { rows } = await pool.query(
-      'INSERT INTO exam_types (name, schedule, max_daily_appointments, is_global, unit_ids) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-      [name, schedule, maxDailyAppointments, isGlobal, unitIds]
+      'INSERT INTO exam_types (name, schedule, max_daily_appointments, is_global, unit_ids, preparation) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+      [name, schedule, maxDailyAppointments, isGlobal, unitIds, preparation]
     );
     await audit(req, 'CREATE', 'exam_type', rows[0].id);
     return res.status(201).json(mapExamType(rows[0]));
@@ -1017,10 +1019,11 @@ app.patch('/api/exam-types/:id', authenticate, authorize('ADMIN', 'GENERAL_SUPER
     const maxDailyAppointments = req.body.maxDailyAppointments || null;
     const isGlobal = req.body.isGlobal ?? true;
     const unitIds = req.body.unitIds ? JSON.stringify(req.body.unitIds) : '[]';
+    const preparation = req.body.preparation || null;
     
     const { rows } = await pool.query(
-      'UPDATE exam_types SET name = $1, schedule = $2, max_daily_appointments = $3, is_global = $4, unit_ids = $5 WHERE id = $6 RETURNING *',
-      [name, schedule, maxDailyAppointments, isGlobal, unitIds, req.params.id]
+      'UPDATE exam_types SET name = $1, schedule = $2, max_daily_appointments = $3, is_global = $4, unit_ids = $5, preparation = $6 WHERE id = $7 RETURNING *',
+      [name, schedule, maxDailyAppointments, isGlobal, unitIds, preparation, req.params.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Tipo de exame nao encontrado.' });
     await audit(req, 'UPDATE', 'exam_type', req.params.id);
@@ -1515,6 +1518,57 @@ app.post('/api/appointments', authenticate, async (req, res, next) => {
     next(error);
   }
 });
+
+app.patch('/api/appointments/:id/cancel', authenticate, async (req, res, next) => {
+  try {
+    const { reason } = req.body;
+    const current = await pool.query('SELECT * FROM appointments WHERE id = $1', [req.params.id]);
+    const appointment = current.rows[0];
+    if (!appointment) return res.status(404).json({ error: 'Agendamento nao encontrado.' });
+    if (appointment.status === 'CANCELLED') return res.status(400).json({ error: 'Agendamento ja esta cancelado.' });
+
+    if (req.user.role === 'PATIENT') {
+      if (appointment.patient_id !== req.user.id) {
+        return res.status(403).json({ error: 'Acesso negado.' });
+      }
+
+      const apptDateStr = appointment.date instanceof Date ? appointment.date.toISOString().split('T')[0] : String(appointment.date).split('T')[0];
+      const apptDateTime = new Date(`${apptDateStr}T${appointment.time}:00`);
+      const now = new Date();
+      const diffMs = apptDateTime.getTime() - now.getTime();
+      const diffHours = diffMs / (1000 * 60 * 60);
+
+      if (diffHours < 8) {
+        return res.status(400).json({ error: 'Cancelamento pelo paciente permitido apenas com no minimo 8 horas de antecedencia.' });
+      }
+    } else {
+      if (!canAccessUnit(req, appointment.unit_id)) return res.status(403).json({ error: 'Acesso negado.' });
+      if (!reason || String(reason).trim() === '') {
+        return res.status(400).json({ error: 'Motivo do cancelamento e obrigatorio para profissionais/recepcao.' });
+      }
+    }
+
+    let notes = appointment.notes || '';
+    if (reason && String(reason).trim() !== '') {
+      const cancelReason = `[CANCELADO: ${String(reason).trim()}]`;
+      notes = notes ? `${notes}\n\n${cancelReason}` : cancelReason;
+    }
+
+    const { rows } = await pool.query(
+      `UPDATE appointments
+       SET status = 'CANCELLED', notes = $1
+       WHERE id = $2
+       RETURNING *`,
+      [notes ? sanitizeText(notes).slice(0, 500) : null, req.params.id]
+    );
+
+    await audit(req, 'UPDATE', 'appointment', req.params.id, { action: 'CANCELLED', reason });
+    res.json(mapAppointment(rows[0]));
+  } catch (error) {
+    next(error);
+  }
+});
+
 
 app.post('/api/appointments/:id/check-in', authenticate, authorize('ADMIN', 'GENERAL_SUPERVISOR', 'ATTENDANT'), async (req, res, next) => {
   try {

@@ -236,12 +236,15 @@ export const api = {
     add: (appt: Omit<Appointment, 'id' | 'status'>) => request<Appointment>('/appointments', { method: 'POST', body: JSON.stringify(appt) }),
     checkIn: (id: string, priority = false) => request<Appointment>(`/appointments/${pathId(id)}/check-in`, { method: 'POST', body: JSON.stringify({ priority }) }),
     call: (id: string) => request<Appointment>(`/appointments/${pathId(id)}/call`, { method: 'POST' }),
-    update: (id: string, updates: Partial<Appointment>) => request<Appointment>(`/appointments/${pathId(id)}`, { method: 'PATCH', body: JSON.stringify(updates) })
+    update: (id: string, updates: Partial<Appointment>) => request<Appointment>(`/appointments/${pathId(id)}`, { method: 'PATCH', body: JSON.stringify(updates) }),
+    cancel: (id: string, reason?: string) => request<Appointment>(`/appointments/${pathId(id)}/cancel`, { method: 'PATCH', body: JSON.stringify({ reason }) })
   },
   exams: {
     getByPatientId: (patientId: string) => request<Exam[]>('/exams', {}, { patientId })
       .catch(() => []),
-    add: (exam: Omit<Exam, 'id' | 'status' | 'resultAvailable'>) => request<Exam>('/exams', { method: 'POST', body: JSON.stringify(exam) })
+    getByUnit: (unitId: string) => request<Exam[]>('/exams', {}, { unitId }).catch(() => []),
+    add: (exam: Omit<Exam, 'id' | 'status' | 'resultAvailable'>) => request<Exam>('/exams', { method: 'POST', body: JSON.stringify(exam) }),
+    update: (id: string, updates: Partial<Exam>) => request<Exam>(`/exams/${pathId(id)}`, { method: 'PATCH', body: JSON.stringify(updates) })
   },
   careHistory: {
     getByPatientId: (patientId: string) => request<CareHistoryItem[]>('/care-history', {}, { patientId })

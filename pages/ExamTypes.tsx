@@ -247,6 +247,17 @@ export const ExamTypes: React.FC = () => {
                </div>
 
                <div>
+                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Preparo (Opcional)</label>
+                   <textarea
+                       placeholder="Ex: Jejum de 8 horas..."
+                       rows={3}
+                       className="w-full p-2.5 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-primary focus:outline-none transition-all resize-none"
+                       value={formData.preparation || ''}
+                       onChange={e => setFormData({...formData, preparation: e.target.value})}
+                   />
+               </div>
+
+               <div>
                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Dias de Atendimento na Semana</label>
                    <div className="flex flex-wrap gap-2">
                        {DAYS_OF_WEEK.map(day => {

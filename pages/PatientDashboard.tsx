@@ -115,7 +115,9 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({ user }) => {
   );
 
   const firstName = user.name.split(' ')[0];
-  const nextDate = nextAppointment ? new Date(`${nextAppointment.date}T00:00:00`) : null;
+  const nextDate = nextAppointment?.date
+    ? new Date(`${String(nextAppointment.date).split('T')[0]}T00:00:00`)
+    : null;
 
   return (
     <>

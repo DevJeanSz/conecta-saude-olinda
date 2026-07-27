@@ -11,6 +11,8 @@ export const Units: React.FC = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState<Partial<HealthUnit>>({ name: '', address: '', phone: '', cep: '', addressNumber: '', neighborhood: '', city: '', state: '' });
+  const [itemsPerPage, setItemsPerPage] = useState(20);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const loadUnits = async () => {
     const data = await api.units.getAll();
@@ -124,7 +126,10 @@ export const Units: React.FC = () => {
             placeholder="Buscar por nome, bairro ou CNES..."
             className="w-full pl-10 pr-4 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-primary focus:outline-none transition-all"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setCurrentPage(1);
+            }}
           />
           <Search className="absolute left-3 top-2.5 w-5 h-5 text-slate-400" />
         </div>
@@ -143,13 +148,19 @@ export const Units: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-              {units
-                .filter(u => 
+              {(() => {
+                const filtered = units.filter(u => 
                   u.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                   (u.neighborhood || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
                   (u.cnesCode || '').includes(searchQuery)
-                )
-                .map(unit => (
+                );
+                
+                const totalPages = Math.ceil(filtered.length / itemsPerPage);
+                const startIndex = (currentPage - 1) * itemsPerPage;
+                const paginated = filtered.slice(startIndex, startIndex + itemsPerPage);
+
+                return paginated.length > 0 ? (
+                  paginated.map(unit => (
                 <tr key={unit.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors group">
                   <td className="px-6 py-4">
                     <div className="font-medium text-slate-900 dark:text-slate-100">{unit.name}</div>
@@ -205,16 +216,71 @@ export const Units: React.FC = () => {
                     </div>
                   </td>
                 </tr>
-              ))}
-              {units.length === 0 && (
+                ))
+              ) : (
                 <tr>
                   <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
-                    Nenhuma unidade cadastrada.
+                    Nenhuma unidade encontrada.
                   </td>
                 </tr>
-              )}
+              );
+              })()}
             </tbody>
           </table>
+        </div>
+        
+        {/* Pagination Controls */}
+        <div className="flex flex-col sm:flex-row items-center justify-between p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/30 gap-4">
+          <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+            <span>Mostrar</span>
+            <select
+              className="border border-slate-300 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 px-2 py-1 outline-none focus:ring-2 focus:ring-primary"
+              value={itemsPerPage}
+              onChange={(e) => {
+                setItemsPerPage(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+            >
+              <option value={20}>20</option>
+              <option value={30}>30</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+            <span>itens por página</span>
+          </div>
+
+          <div className="flex items-center gap-1">
+            {(() => {
+              const filteredLength = units.filter(u => 
+                u.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                (u.neighborhood || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                (u.cnesCode || '').includes(searchQuery)
+              ).length;
+              const totalPages = Math.max(1, Math.ceil(filteredLength / itemsPerPage));
+              
+              return (
+                <>
+                  <button
+                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    className="px-3 py-1 text-sm border border-slate-300 dark:border-slate-700 rounded-md disabled:opacity-50 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+                  >
+                    Anterior
+                  </button>
+                  <span className="text-sm px-3 text-slate-600 dark:text-slate-400">
+                    Página {currentPage} de {totalPages}
+                  </span>
+                  <button
+                    disabled={currentPage === totalPages}
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    className="px-3 py-1 text-sm border border-slate-300 dark:border-slate-700 rounded-md disabled:opacity-50 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+                  >
+                    Próxima
+                  </button>
+                </>
+              );
+            })()}
+          </div>
         </div>
       </div>
 

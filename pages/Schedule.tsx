@@ -7,6 +7,7 @@ import {
   AppointmentStatus,
   Specialty,
   HealthUnit,
+  Exam,
 } from '../types';
 import { api } from '../services/api';
 import { STATUS_LABELS } from '../constants';
@@ -34,12 +35,7 @@ type PatientLookupFeedback = {
   message: string;
 } | null;
 
-const TIME_SLOTS = Array.from({ length: 20 }, (_, index) => {
-  const totalMinutes = 8 * 60 + index * 30;
-  const hour = Math.floor(totalMinutes / 60);
-  const minute = totalMinutes % 60;
-  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
-});
+
 
 const normalizeDigits = (value = '') => value.replace(/\D/g, '');
 
@@ -128,6 +124,7 @@ const getPatientVisibleUnitId = (
 
 export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [exams, setExams] = useState<Exam[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [patientLookupPool, setPatientLookupPool] = useState<Patient[]>([]);
   const [doctors, setDoctors] = useState<User[]>([]);
@@ -135,12 +132,15 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
   const [units, setUnits] = useState<HealthUnit[]>([]);
   const [unit, setUnit] = useState<HealthUnit | null>(null);
   const [selectedUnitId, setSelectedUnitId] = useState(user.unitId || user.unitIds?.[0] || '');
+  const [unitSearch, setUnitSearch] = useState('');
+  const [isUnitSelectOpen, setIsUnitSelectOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'PLANTÃO' | 'COMERCIAL' | '24H'>('COMERCIAL');
   const [selectedDate, setSelectedDate] = useState(toDateInputValue(new Date()));
   const [query, setQuery] = useState('');
   const [loadingSchedule, setLoadingSchedule] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showNewApptModal, setShowNewApptModal] = useState(false);
-  const [showDetailModal, setShowDetailModal] = useState<Appointment | null>(null);
+  const [showDetailModal, setShowDetailModal] = useState<{ type: 'appointment' | 'exam', data: any } | null>(null);
   const [doctorNotes, setDoctorNotes] = useState('');
   const [identifiedPatientId, setIdentifiedPatientId] = useState<string | null>(null);
   const [patientLookupFeedback, setPatientLookupFeedback] = useState<PatientLookupFeedback>(null);
@@ -175,6 +175,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
 
       if (!activeUnitId) {
         setAppointments([]);
+        setExams([]);
         setPatients([]);
         setPatientLookupPool([]);
         setDoctors([]);
@@ -192,8 +193,9 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
         ? api.patients.getAll()
         : unitPatientsPromise;
 
-      const [unitAppts, unitPatients, searchablePatients, unitDoctors, unitData] = await Promise.all([
+      const [unitAppts, unitExams, unitPatients, searchablePatients, unitDoctors, unitData] = await Promise.all([
         api.appointments.getByUnit(activeUnitId),
+        api.exams.getByUnit(activeUnitId),
         unitPatientsPromise,
         patientLookupPromise,
         api.users.getDoctorsByUnit(activeUnitId),
@@ -205,6 +207,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
         : unitAppts;
 
       setAppointments(scopedAppointments);
+      setExams(unitExams);
       setPatients(unitPatients);
       setPatientLookupPool(searchablePatients);
       setDoctors(unitDoctors);
@@ -217,6 +220,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
       setAppointments([]);
+      setExams([]);
       setPatients([]);
       setPatientLookupPool([]);
       setDoctors([]);
@@ -252,6 +256,31 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
     [newApptData.unitId, specialties],
   );
 
+  const TIME_SLOTS = useMemo(() => {
+    if (viewMode === 'PLANTÃO') {
+      return Array.from({ length: 25 }, (_, index) => {
+        const totalMinutes = 7 * 60 + index * 30;
+        const hour = Math.floor(totalMinutes / 60);
+        const minute = totalMinutes % 60;
+        return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+      });
+    }
+    if (viewMode === '24H') {
+      return Array.from({ length: 48 }, (_, index) => {
+        const totalMinutes = index * 30;
+        const hour = Math.floor(totalMinutes / 60);
+        const minute = totalMinutes % 60;
+        return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+      });
+    }
+    return Array.from({ length: 20 }, (_, index) => {
+      const totalMinutes = 8 * 60 + index * 30;
+      const hour = Math.floor(totalMinutes / 60);
+      const minute = totalMinutes % 60;
+      return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+    });
+  }, [viewMode]);
+
   const validSpecialtyIds = useMemo(
     () => validSpecialties.map((specialty) => specialty.id),
     [validSpecialties],
@@ -282,36 +311,46 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
   const patientNameById = useMemo(() => new Map(searchablePatients.map((patient) => [patient.id, patient.name])), [searchablePatients]);
   const doctorNameById = useMemo(() => new Map(doctors.map((doctor) => [doctor.id, doctor.name])), [doctors]);
 
-  const filteredAppointments = useMemo(() => {
+  const filteredEvents = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase('pt-BR');
-    return appointments.filter((appointment) => {
-      const patientName = patientNameById.get(appointment.patientId) || '';
-      const doctorName = doctorNameById.get(appointment.doctorId) || '';
+    
+    const combined = [
+      ...appointments.map(a => ({ type: 'appointment' as const, data: a })),
+      ...exams.map(e => ({ type: 'exam' as const, data: e }))
+    ];
+
+    return combined.filter((event) => {
+      const patientName = patientNameById.get(event.data.patientId) || '';
+      const docOrType = event.type === 'appointment'
+        ? (doctorNameById.get(event.data.doctorId) || '')
+        : 'Exame';
+      
       return !normalizedQuery
         || patientName.toLocaleLowerCase('pt-BR').includes(normalizedQuery)
-        || doctorName.toLocaleLowerCase('pt-BR').includes(normalizedQuery);
+        || docOrType.toLocaleLowerCase('pt-BR').includes(normalizedQuery);
     });
-  }, [appointments, doctorNameById, patientNameById, query]);
+  }, [appointments, exams, doctorNameById, patientNameById, query]);
 
-  const appointmentsBySlot = useMemo(() => {
-    const map = new Map<string, Appointment[]>();
-    filteredAppointments.forEach((appointment) => {
-      const key = `${appointment.date}-${appointment.time}`;
+  const eventsBySlot = useMemo(() => {
+    const map = new Map<string, Array<{ type: 'appointment' | 'exam', data: any }>>();
+    filteredEvents.forEach((event) => {
+      const key = `${event.data.date}-${event.data.time}`;
       const current = map.get(key) || [];
-      current.push(appointment);
+      current.push(event);
       map.set(key, current);
     });
     return map;
-  }, [filteredAppointments]);
+  }, [filteredEvents]);
 
-  const selectedDayAppointments = useMemo(() => filteredAppointments
-    .filter((appointment) => appointment.date === selectedDate)
-    .sort((a, b) => a.time.localeCompare(b.time)), [filteredAppointments, selectedDate]);
+  const selectedDayEvents = useMemo(() => filteredEvents
+    .filter((event) => event.data.date === selectedDate)
+    .sort((a, b) => a.data.time.localeCompare(b.data.time)), [filteredEvents, selectedDate]);
 
-  const weekAppointmentsCount = useMemo(() => {
-    const dayValues = new Set(visibleDays.map(toDateInputValue));
-    return filteredAppointments.filter((appointment) => dayValues.has(appointment.date)).length;
-  }, [filteredAppointments, visibleDays]);
+  const weekEventsCount = useMemo(() => {
+    const start = toDateInputValue(weekStart);
+    const end = toDateInputValue(addDays(weekStart, 7));
+    return filteredEvents.filter((event) => event.data.date >= start && event.data.date < end).length;
+  }, [filteredEvents, weekStart]);
 
   const isScheduleOpen = (schedule: { dayOfWeek: number; startTime: string; endTime: string }[] | undefined, date: string, time?: string) => {
     if (!schedule || schedule.length === 0) return true;
@@ -585,17 +624,52 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
     }
   };
 
-  const handleStatusChange = async (id: string, status: AppointmentStatus) => {
-    const updated = await api.appointments.update(id, { status });
-    await loadData();
-    if (showDetailModal && showDetailModal.id === id) {
-      setShowDetailModal({ ...showDetailModal, status: updated?.status || status });
+  const handleStatusChange = async (id: string, status: AppointmentStatus | string, type: 'appointment' | 'exam') => {
+    if (status === AppointmentStatus.CANCELLED || status === 'CANCELLED') {
+      const reason = window.prompt('Motivo do cancelamento (obrigatório):');
+      if (reason === null) return;
+      if (!reason.trim()) {
+        alert('O motivo do cancelamento é obrigatório.');
+        return;
+      }
+      try {
+        let updated;
+        if (type === 'appointment') {
+          updated = await api.appointments.cancel(id, reason.trim());
+        } else {
+          updated = await api.exams.update(id, { status: 'CANCELLED' }); 
+        }
+        await loadData();
+        if (showDetailModal && showDetailModal.data.id === id) {
+          setShowDetailModal({ ...showDetailModal, data: { ...showDetailModal.data, status: updated?.status || status } });
+        }
+      } catch (err) {
+        alert('Erro ao cancelar o agendamento.');
+      }
+      return;
+    }
+
+    try {
+      let updated;
+      if (type === 'appointment') {
+        updated = await api.appointments.update(id, { status: status as AppointmentStatus });
+      } else {
+        updated = await api.exams.update(id, { status });
+      }
+      await loadData();
+      if (showDetailModal && showDetailModal.data.id === id) {
+        setShowDetailModal({ ...showDetailModal, data: { ...showDetailModal.data, status: updated?.status || status } });
+      }
+    } catch (err) {
+      alert('Erro ao atualizar status.');
     }
   };
 
   const handleSaveNotes = async () => {
     if (!showDetailModal) return;
-    await api.appointments.update(showDetailModal.id, { notes: doctorNotes });
+    if (showDetailModal.type === 'appointment') {
+      await api.appointments.update(showDetailModal.data.id, { notes: doctorNotes });
+    }
     setShowDetailModal(null);
     setDoctorNotes('');
     await loadData();
@@ -646,15 +720,79 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
           </strong>
         </div>
 
+        {units.length > 1 && (
+          <div className="schedule-search" style={{ minWidth: '220px', position: 'relative' }}>
+            <div
+              onClick={() => setIsUnitSelectOpen(!isUnitSelectOpen)}
+              style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem', width: '100%', height: '100%' }}
+            >
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#64748b' }}>
+                {units.find(u => u.id === selectedUnitId)?.name || 'Selecionar unidade...'}
+              </span>
+            </div>
+            {isUnitSelectOpen && (
+              <div style={{ position: 'absolute', top: '100%', left: 0, width: '100%', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '4px', zIndex: 10, maxHeight: '300px', display: 'flex', flexDirection: 'column' }}>
+                <input
+                  autoFocus
+                  onChange={e => setUnitSearch(e.target.value)}
+                  onClick={e => e.stopPropagation()}
+                  placeholder="Buscar unidade..."
+                  style={{ padding: '0.5rem', border: 'none', borderBottom: '1px solid #e2e8f0', outline: 'none' }}
+                  value={unitSearch}
+                />
+                <div style={{ overflowY: 'auto' }}>
+                  {units.filter(u => u.name.toLowerCase().includes(unitSearch.toLowerCase())).map(u => (
+                    <button
+                      key={u.id}
+                      onClick={() => {
+                        setSelectedUnitId(u.id);
+                        setIsUnitSelectOpen(false);
+                        setUnitSearch('');
+                      }}
+                      style={{ padding: '0.5rem', width: '100%', textAlign: 'left', border: 'none', background: 'transparent', cursor: 'pointer' }}
+                      type="button"
+                    >
+                      {u.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         <label className="schedule-search">
           <Search size={18} />
           <input
             aria-label="Buscar agendamento"
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Buscar por paciente ou profissional"
+            placeholder="Buscar por paciente..."
             value={query}
           />
         </label>
+        
+        <div className="schedule-view-toggle" style={{ display: 'flex', gap: '0.25rem', background: '#f1f5f9', padding: '0.25rem', borderRadius: '0.5rem' }}>
+          {(['PLANTÃO', 'COMERCIAL', '24H'] as const).map(mode => (
+            <button
+              key={mode}
+              onClick={() => setViewMode(mode)}
+              style={{
+                padding: '0.25rem 0.75rem',
+                fontSize: '0.875rem',
+                border: 'none',
+                borderRadius: '0.25rem',
+                cursor: 'pointer',
+                background: viewMode === mode ? '#fff' : 'transparent',
+                boxShadow: viewMode === mode ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
+                fontWeight: viewMode === mode ? 600 : 400,
+                color: viewMode === mode ? '#0f172a' : '#64748b'
+              }}
+              type="button"
+            >
+              {mode}
+            </button>
+          ))}
+        </div>
 
         <div className="schedule-legend">
           <span><i className="scheduled" /> Agendado</span>
@@ -705,25 +843,32 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
                   <div className="schedule-time-cell">{time}</div>
                   {visibleDays.map((day) => {
                     const date = toDateInputValue(day);
-                    const slotAppointments = appointmentsBySlot.get(`${date}-${time}`) || [];
+                    const slotEvents = eventsBySlot.get(`${date}-${time}`) || [];
                     return (
                       <div className="schedule-slot" key={`${date}-${time}`}>
-                        {slotAppointments.length > 0 ? (
-                          slotAppointments.map((appointment) => {
-                            const patientName = patientNameById.get(appointment.patientId) || 'Paciente';
+                        {slotEvents.length > 0 ? (
+                          slotEvents.map((event) => {
+                            const patientName = patientNameById.get(event.data.patientId) || 'Paciente';
+                            const docOrType = event.type === 'appointment'
+                              ? (doctorNameById.get(event.data.doctorId) || 'Profissional')
+                              : 'Exame';
+                            // Different class for exam vs appointment
+                            const eventClass = event.type === 'exam' ? 'schedule-event-exam' : '';
+
                             return (
                               <button
-                                className={`schedule-event ${statusClass[appointment.status]}`}
-                                key={appointment.id}
+                                className={`schedule-event ${statusClass[event.data.status]} ${eventClass}`}
+                                key={`${event.type}-${event.data.id}`}
                                 onClick={() => {
-                                  setDoctorNotes(appointment.notes || '');
-                                  setShowDetailModal(appointment);
+                                  setDoctorNotes(event.data.notes || '');
+                                  setShowDetailModal(event);
                                 }}
                                 type="button"
+                                style={event.type === 'exam' ? { borderLeftColor: '#10b981', backgroundColor: '#ecfdf5' } : undefined}
                               >
                                 <strong>{patientName}</strong>
-                                <span>{doctorNameById.get(appointment.doctorId) || 'Profissional'}</span>
-                                <small>{STATUS_LABELS[appointment.status]}</small>
+                                <span>{docOrType}</span>
+                                <small>{STATUS_LABELS[event.data.status]}</small>
                               </button>
                             );
                           })
@@ -750,12 +895,12 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
 
         <aside className="schedule-day-panel">
           <div>
-            <span>{weekAppointmentsCount} na semana</span>
+            <span>{weekEventsCount} na semana</span>
             <h3>{selectedDateLabel}</h3>
-            <p>{selectedDayAppointments.length} atendimento(s) selecionado(s)</p>
+            <p>{selectedDayEvents.length} atendimento(s) selecionado(s)</p>
           </div>
 
-          {selectedDayAppointments.length === 0 ? (
+          {selectedDayEvents.length === 0 ? (
             <div className="schedule-empty-day">
               <Clock size={26} />
               <strong>Nenhum atendimento neste dia</strong>
@@ -763,23 +908,27 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
             </div>
           ) : (
             <div className="schedule-day-list">
-              {selectedDayAppointments.map((appointment) => {
-                const patientName = patientNameById.get(appointment.patientId) || 'Paciente';
+              {selectedDayEvents.map((event) => {
+                const patientName = patientNameById.get(event.data.patientId) || 'Paciente';
+                const docOrType = event.type === 'appointment'
+                  ? (doctorNameById.get(event.data.doctorId) || 'Profissional')
+                  : 'Exame';
+                
                 return (
                   <button
-                    key={appointment.id}
+                    key={`${event.type}-${event.data.id}`}
                     onClick={() => {
-                      setDoctorNotes(appointment.notes || '');
-                      setShowDetailModal(appointment);
+                      setDoctorNotes(event.data.notes || '');
+                      setShowDetailModal(event);
                     }}
                     type="button"
                   >
-                    <span>{appointment.time}</span>
+                    <span>{event.data.time}</span>
                     <div>
                       <strong>{patientName}</strong>
-                      <small>{doctorNameById.get(appointment.doctorId) || 'Profissional'}</small>
+                      <small>{docOrType}</small>
                     </div>
-                    <i className={statusClass[appointment.status]}>{STATUS_LABELS[appointment.status]}</i>
+                    <i className={statusClass[event.data.status]}>{STATUS_LABELS[event.data.status]}</i>
                   </button>
                 );
               })}
@@ -1020,19 +1169,23 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
 
             <div className="schedule-detail-body">
               <div className="schedule-detail-summary">
-                <span>{showDetailModal.time}</span>
+                <span>{showDetailModal.data.time}</span>
                 <div>
-                  <strong>{patientNameById.get(showDetailModal.patientId) || 'Paciente'}</strong>
-                  <small>{doctorNameById.get(showDetailModal.doctorId) || 'Profissional'}</small>
+                  <strong>{patientNameById.get(showDetailModal.data.patientId) || 'Paciente'}</strong>
+                  <small>
+                    {showDetailModal.type === 'appointment'
+                      ? (doctorNameById.get(showDetailModal.data.doctorId) || 'Profissional')
+                      : 'Exame'}
+                  </small>
                 </div>
               </div>
 
               <div className="schedule-status-actions">
                 {Object.values(AppointmentStatus).map((status) => (
                   <button
-                    className={showDetailModal.status === status ? 'active' : ''}
+                    className={showDetailModal.data.status === status ? 'active' : ''}
                     key={status}
-                    onClick={() => handleStatusChange(showDetailModal.id, status)}
+                    onClick={() => handleStatusChange(showDetailModal.data.id, status, showDetailModal.type)}
                     type="button"
                   >
                     {STATUS_LABELS[status]}

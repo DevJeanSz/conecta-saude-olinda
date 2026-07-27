@@ -30,6 +30,7 @@ import {
   CareHistoryItem,
   Exam,
   ExamStatus,
+  ExamType,
   HealthUnit,
   Patient,
   ReminderPreference,
@@ -218,7 +219,7 @@ export const PatientAppointmentsPage: React.FC<PatientPageProps> = ({ user }) =>
   const cancelAppointment = async (appointment: Appointment) => {
     if (!window.confirm('Cancelar esta consulta?')) return;
     await api.appointments.update(appointment.id, { status: AppointmentStatus.CANCELLED });
-    setFeedback('Consulta cancelada. O histórico foi preservado.');
+    setFeedback('Consulta cancelada!');
     await refresh();
   };
 
@@ -463,11 +464,12 @@ export const PatientExamSchedulePage: React.FC<PatientPageProps> = ({ user }) =>
   const navigate = useNavigate();
   const [patient, setPatient] = useState<Patient | null>(null);
   const [units, setUnits] = useState<HealthUnit[]>([]);
+  const [examTypes, setExamTypes] = useState<ExamType[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [form, setForm] = useState({
-    type: 'Hemograma completo',
+    typeId: '',
     requestCode: 'REQ-OLINDA-2026',
     unitId: '',
     date: '',
@@ -477,12 +479,23 @@ export const PatientExamSchedulePage: React.FC<PatientPageProps> = ({ user }) =>
 
   useEffect(() => {
     const run = async () => {
-      const [patientData, unitData] = await Promise.all([loadPatient(user), api.units.getAll()]);
+      const [patientData, unitData, typeData] = await Promise.all([loadPatient(user), api.units.getAll(), api.examTypes.getAll()]);
       setPatient(patientData);
       setUnits(unitData);
+      setExamTypes(typeData);
+      
+      const firstType = typeData[0];
+      const validUnits = firstType 
+        ? (firstType.isGlobal ? unitData : unitData.filter(u => firstType.unitIds?.includes(u.id)))
+        : [];
+      const defaultUnit = patientData?.unitId && validUnits.some(u => u.id === patientData.unitId)
+        ? patientData.unitId 
+        : (validUnits[0]?.id || '');
+        
       setForm(prev => ({
         ...prev,
-        unitId: patientData?.unitId || unitData[0]?.id || '',
+        typeId: firstType?.id || '',
+        unitId: defaultUnit,
         date: prev.date || availableExamDates[0] || '',
         time: prev.time || EXAM_TIME_OPTIONS[0],
       }));
@@ -491,9 +504,22 @@ export const PatientExamSchedulePage: React.FC<PatientPageProps> = ({ user }) =>
     run();
   }, [availableExamDates, user.id]);
 
-  const preparation = form.type.includes('Sangue') || form.type.includes('Hemograma')
-    ? 'Jejum de 8 horas e documento com foto.'
-    : 'Levar documento com foto e solicitação do exame.';
+  const selectedExamType = examTypes.find(t => t.id === form.typeId);
+  const preparation = selectedExamType?.preparation || 'Nenhuma orientação de preparo para este exame.';
+  const availableUnits = selectedExamType 
+    ? (selectedExamType.isGlobal ? units : units.filter(u => selectedExamType.unitIds?.includes(u.id)))
+    : [];
+
+  const handleExamTypeChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const typeId = event.target.value;
+    const type = examTypes.find(t => t.id === typeId);
+    if (!type) return;
+    
+    const validUnits = type.isGlobal ? units : units.filter(u => type.unitIds?.includes(u.id));
+    const newUnitId = validUnits.some(u => u.id === form.unitId) ? form.unitId : (validUnits[0]?.id || '');
+    
+    setForm(prev => ({ ...prev, typeId, unitId: newUnitId }));
+  };
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -501,12 +527,16 @@ export const PatientExamSchedulePage: React.FC<PatientPageProps> = ({ user }) =>
       setFeedback({ type: 'error', message: 'Cadastro de paciente não localizado.' });
       return;
     }
+    if (!selectedExamType) {
+      setFeedback({ type: 'error', message: 'Selecione um tipo de exame válido.' });
+      return;
+    }
     setSubmitting(true);
     try {
       await api.exams.add({
         patientId: patient.id,
         unitId: form.unitId,
-        type: form.type,
+        type: selectedExamType.name,
         requestCode: form.requestCode,
         date: form.date,
         time: form.time,
@@ -530,11 +560,9 @@ export const PatientExamSchedulePage: React.FC<PatientPageProps> = ({ user }) =>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className="mb-2 block text-sm font-black text-[#06296F]">Tipo de exame</label>
-              <select className={inputClass} value={form.type} onChange={event => setForm({ ...form, type: event.target.value })}>
-                <option>Hemograma completo</option>
-                <option>Glicemia de jejum</option>
-                <option>Raio-X simples</option>
-                <option>Ultrassonografia</option>
+              <select className={inputClass} value={form.typeId} onChange={handleExamTypeChange}>
+                {examTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                {examTypes.length === 0 && <option value="">Nenhum exame disponível</option>}
               </select>
             </div>
             <div>
@@ -543,8 +571,9 @@ export const PatientExamSchedulePage: React.FC<PatientPageProps> = ({ user }) =>
             </div>
             <div>
               <label className="mb-2 block text-sm font-black text-[#06296F]">Unidade</label>
-              <select className={inputClass} value={form.unitId} onChange={event => setForm({ ...form, unitId: event.target.value })} required>
-                {units.map(unit => <option key={unit.id} value={unit.id}>{unit.name}</option>)}
+              <select className={inputClass} value={form.unitId} onChange={event => setForm({ ...form, unitId: event.target.value })} required disabled={availableUnits.length === 0}>
+                {availableUnits.map(unit => <option key={unit.id} value={unit.id}>{unit.name}</option>)}
+                {availableUnits.length === 0 && <option value="">Sem unidades vinculadas</option>}
               </select>
             </div>
             <div className="grid grid-cols-2 gap-3">
