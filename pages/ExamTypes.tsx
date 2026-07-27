@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ExamType, HealthUnit } from '../types';
 import { api } from '../services/api';
-import { Plus, Trash2, Edit2, Stethoscope } from 'lucide-react';
+import { Plus, Trash2, Edit2, Stethoscope, Search } from 'lucide-react';
 
 const DAYS_OF_WEEK = [
   { id: 1, name: 'Segunda' },
@@ -14,7 +14,7 @@ const DAYS_OF_WEEK = [
 ];
 
 export const ExamTypes: React.FC = () => {
-  const [ExamTypes, setExamTypes] = useState<ExamType[]>([]);
+  const [examTypes, setExamTypes] = useState<ExamType[]>([]);
   const [units, setUnits] = useState<HealthUnit[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showModal, setShowModal] = useState(false);
@@ -32,7 +32,7 @@ export const ExamTypes: React.FC = () => {
 
   const loadData = async () => {
     const [specData, unitsData] = await Promise.all([
-      api.ExamTypes.getAll(),
+      api.examTypes.getAll(),
       api.units.getAll()
     ]);
     setExamTypes(specData);
@@ -73,9 +73,9 @@ export const ExamTypes: React.FC = () => {
     };
 
     if (editingId) {
-      await api.ExamTypes.update(editingId, payload);
+      await api.examTypes.update(editingId, payload);
     } else {
-      await api.ExamTypes.add(payload as Omit<ExamType, 'id'>);
+      await api.examTypes.add(payload as Omit<ExamType, 'id'>);
     }
     
     loadData();
@@ -85,7 +85,7 @@ export const ExamTypes: React.FC = () => {
 
   const handleDelete = async (id: string) => {
     if (confirm('Tem certeza que deseja excluir esta Tipo de Exame?')) {
-      await api.ExamTypes.delete(id);
+      await api.examTypes.delete(id);
       loadData();
     }
   };
@@ -158,7 +158,7 @@ export const ExamTypes: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-              {ExamTypes
+              {examTypes
                 .filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()))
                 .map(spec => (
                 <tr key={spec.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors group">
@@ -205,7 +205,7 @@ export const ExamTypes: React.FC = () => {
                   </td>
                 </tr>
               ))}
-              {ExamTypes.length === 0 && (
+              {examTypes.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
                     Nenhuma Tipo de Exame cadastrada.
