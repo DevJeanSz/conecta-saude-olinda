@@ -56,12 +56,16 @@ const buildTimeSlots = (startTime: string, endTime: string) => {
 };
 
 const formatDate = (value: string) => {
-  const date = new Date(`${value}T00:00:00`);
+  if (!value) return '';
+  const dateStr = value.includes('T') ? value.split('T')[0] : value;
+  const date = new Date(`${dateStr}T00:00:00`);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString('pt-BR');
 };
 
 const formatLongDate = (value: string) => {
-  const date = new Date(`${value}T00:00:00`);
+  if (!value) return '';
+  const dateStr = value.includes('T') ? value.split('T')[0] : value;
+  const date = new Date(`${dateStr}T00:00:00`);
   return Number.isNaN(date.getTime())
     ? value
     : date.toLocaleDateString('pt-BR', {

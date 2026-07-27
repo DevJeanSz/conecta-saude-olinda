@@ -208,7 +208,7 @@ export const ExamTypes: React.FC = () => {
               {examTypes.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
-                    Nenhuma Tipo de Exame cadastrada.
+                    Nenhum Tipo de Exame cadastrado.
                   </td>
                 </tr>
               )}
@@ -224,7 +224,7 @@ export const ExamTypes: React.FC = () => {
             <form onSubmit={handleSave} className="space-y-6">
                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nome da Tipo de Exame</label>
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nome do Tipo de Exame</label>
                       <input 
                         required
                         placeholder="Ex: Cardiologia"

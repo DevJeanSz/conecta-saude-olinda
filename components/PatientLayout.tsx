@@ -49,6 +49,7 @@ const drawerItems = [
 export const PatientLayout: React.FC<PatientLayoutProps> = ({ children, user, onLogout }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const navigate = useNavigate();
   const location = useLocation();
@@ -129,17 +130,32 @@ export const PatientLayout: React.FC<PatientLayoutProps> = ({ children, user, on
               </div>
             )}
           </div>
-          <button className="profile-chip" type="button" onClick={() => navigate('/perfil')}>
-            <span>{initials || user.name.charAt(0)}</span>
-            <span>
-              <strong>{user.name}</strong>
-              <small>Paciente</small>
-            </span>
-            <ChevronDown size={16} />
-          </button>
-          <button aria-label="Sair" className="icon-button logout-button" onClick={onLogout} type="button">
-            <LogOut size={19} />
-          </button>
+          <div className="admin-popover-anchor">
+            <button className="profile-chip" type="button" onClick={() => setShowProfileDropdown(!showProfileDropdown)}>
+              <span>{initials || user.name.charAt(0)}</span>
+              <span>
+                <strong>{user.name}</strong>
+                <small>Paciente</small>
+              </span>
+              <ChevronDown size={16} />
+            </button>
+            {showProfileDropdown && (
+              <div className="admin-dropdown profile-dropdown">
+                <button
+                  onClick={() => {
+                    setShowProfileDropdown(false);
+                    navigate('/perfil');
+                  }}
+                  type="button"
+                >
+                  Meu perfil
+                </button>
+                <button className="danger" onClick={onLogout} type="button">
+                  Sair
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 

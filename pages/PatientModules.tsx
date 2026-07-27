@@ -45,7 +45,9 @@ const cardClass = 'rounded-2xl border border-[#D9E6F5] bg-white shadow-[0_8px_20
 const inputClass = 'h-11 w-full rounded-xl border border-[#CBD8E8] bg-white px-3 text-sm font-semibold text-[#10223F] outline-none focus:border-[#0B60C9] focus:ring-4 focus:ring-[#0B60C9]/15';
 
 const formatDate = (value: string) => {
-  const date = new Date(`${value}T00:00:00`);
+  if (!value) return '';
+  const dateStr = value.includes('T') ? value.split('T')[0] : value;
+  const date = new Date(`${dateStr}T00:00:00`);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString('pt-BR');
 };
 

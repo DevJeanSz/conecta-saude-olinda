@@ -3,14 +3,20 @@ export const ACTIVE_APPOINTMENT_STATUSES = new Set(['SCHEDULED']);
 export const isActiveAppointment = appointment =>
   ACTIVE_APPOINTMENT_STATUSES.has(appointment.status || 'SCHEDULED');
 
-export const hasAppointmentConflict = (appointments, candidate, ignoreId = null) =>
-  appointments.some(appointment =>
-    appointment.id !== ignoreId &&
-    appointment.doctor_id === candidate.doctorId &&
-    appointment.date === candidate.date &&
-    appointment.time === candidate.time &&
-    isActiveAppointment(appointment)
-  );
+export const hasAppointmentConflict = (appointments, candidate, ignoreId = null) => {
+  return appointments.some(appointment => {
+    const apptDateStr = typeof appointment.date === 'string' ? appointment.date : 
+      (appointment.date instanceof Date ? appointment.date.toISOString() : String(appointment.date));
+    const candDateStr = typeof candidate.date === 'string' ? candidate.date :
+      (candidate.date instanceof Date ? candidate.date.toISOString() : String(candidate.date));
+
+    return appointment.id !== ignoreId &&
+      appointment.doctor_id === candidate.doctorId &&
+      apptDateStr.substring(0, 10) === candDateStr.substring(0, 10) &&
+      appointment.time === candidate.time &&
+      isActiveAppointment(appointment);
+  });
+};
 
 export const nextQueuePassword = (appointments, isPriority, today) => {
   const prefix = isPriority ? 'P' : 'G';

@@ -1434,8 +1434,15 @@ app.get('/api/appointments', authenticate, async (req, res, next) => {
     const where = [];
 
     if (!canManageAllUnits(req)) {
-      params.push(req.user.unitId);
-      where.push(`unit_id = $${params.length}`);
+      if (req.user.role === 'PATIENT') {
+        if (req.query.unitId) {
+          params.push(String(req.query.unitId));
+          where.push(`unit_id = $${params.length}`);
+        }
+      } else {
+        params.push(req.user.unitId);
+        where.push(`unit_id = $${params.length}`);
+      }
     } else if (req.query.unitId) {
       params.push(String(req.query.unitId));
       where.push(`unit_id = $${params.length}`);
