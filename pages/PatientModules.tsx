@@ -470,7 +470,7 @@ export const PatientExamSchedulePage: React.FC<PatientPageProps> = ({ user }) =>
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [form, setForm] = useState({
     typeId: '',
-    requestCode: 'REQ-OLINDA-2026',
+    requestCode: `REQ-OLI-${Math.floor(Math.random() * 1000000).toString().padStart(6, '0')}`,
     unitId: '',
     date: '',
     time: '08:00',
@@ -567,7 +567,7 @@ export const PatientExamSchedulePage: React.FC<PatientPageProps> = ({ user }) =>
             </div>
             <div>
               <label className="mb-2 block text-sm font-black text-[#06296F]">Solicitação</label>
-              <input className={inputClass} value={form.requestCode} onChange={event => setForm({ ...form, requestCode: event.target.value })} required />
+              <input className={inputClass} value={form.requestCode} disabled title="Código gerado automaticamente" />
             </div>
             <div>
               <label className="mb-2 block text-sm font-black text-[#06296F]">Unidade</label>
