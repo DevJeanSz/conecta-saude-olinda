@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Specialty, HealthUnit } from '../types';
+import { ExamType, HealthUnit } from '../types';
 import { api } from '../services/api';
-import { Plus, Trash2, Edit2, Activity } from 'lucide-react';
+import { Plus, Trash2, Edit2, Stethoscope } from 'lucide-react';
 
 const DAYS_OF_WEEK = [
   { id: 1, name: 'Segunda' },
@@ -13,14 +13,14 @@ const DAYS_OF_WEEK = [
   { id: 0, name: 'Domingo' }
 ];
 
-export const Specialties: React.FC = () => {
-  const [specialties, setSpecialties] = useState<Specialty[]>([]);
+export const ExamTypes: React.FC = () => {
+  const [ExamTypes, setExamTypes] = useState<ExamType[]>([]);
   const [units, setUnits] = useState<HealthUnit[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  const defaultForm: Partial<Specialty> = {
+  const defaultForm: Partial<ExamType> = {
     name: '',
     isGlobal: true,
     maxDailyAppointments: 20,
@@ -28,14 +28,14 @@ export const Specialties: React.FC = () => {
     schedule: []
   };
 
-  const [formData, setFormData] = useState<Partial<Specialty>>(defaultForm);
+  const [formData, setFormData] = useState<Partial<ExamType>>(defaultForm);
 
   const loadData = async () => {
     const [specData, unitsData] = await Promise.all([
-      api.specialties.getAll(),
+      api.ExamTypes.getAll(),
       api.units.getAll()
     ]);
-    setSpecialties(specData);
+    setExamTypes(specData);
     setUnits(unitsData);
   };
 
@@ -48,7 +48,7 @@ export const Specialties: React.FC = () => {
     setEditingId(null);
   };
 
-  const handleEdit = (spec: Specialty) => {
+  const handleEdit = (spec: ExamType) => {
     setFormData({
       ...spec,
       schedule: spec.schedule || [],
@@ -73,9 +73,9 @@ export const Specialties: React.FC = () => {
     };
 
     if (editingId) {
-      await api.specialties.update(editingId, payload);
+      await api.ExamTypes.update(editingId, payload);
     } else {
-      await api.specialties.add(payload as Omit<Specialty, 'id'>);
+      await api.ExamTypes.add(payload as Omit<ExamType, 'id'>);
     }
     
     loadData();
@@ -84,8 +84,8 @@ export const Specialties: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm('Tem certeza que deseja excluir esta especialidade?')) {
-      await api.specialties.delete(id);
+    if (confirm('Tem certeza que deseja excluir esta Tipo de Exame?')) {
+      await api.ExamTypes.delete(id);
       loadData();
     }
   };
@@ -120,15 +120,15 @@ export const Specialties: React.FC = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-           <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Especialidades Médicas</h2>
-           <p className="text-sm text-slate-500 dark:text-slate-400">Gerencie regras de atendimento e cotas das especialidades</p>
+           <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Tipo de Exames Médicas</h2>
+           <p className="text-sm text-slate-500 dark:text-slate-400">Gerencie regras de atendimento e cotas das Tipo de Exames</p>
         </div>
         <button 
           onClick={() => { resetForm(); setShowModal(true); }}
           className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary-dark transition-colors"
         >
           <Plus className="w-4 h-4" />
-          Nova Especialidade
+          Nova Tipo de Exame
         </button>
       </div>
 
@@ -136,7 +136,7 @@ export const Specialties: React.FC = () => {
         <div className="relative w-full sm:w-96">
           <input
             type="text"
-            placeholder="Buscar especialidade..."
+            placeholder="Buscar Tipo de Exame..."
             className="w-full pl-10 pr-4 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-primary focus:outline-none transition-all"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -150,7 +150,7 @@ export const Specialties: React.FC = () => {
           <table className="w-full text-left text-sm text-slate-600 dark:text-slate-400">
             <thead className="bg-slate-50 dark:bg-slate-950/50 text-slate-700 dark:text-slate-300">
               <tr>
-                <th className="px-6 py-4 font-semibold">Especialidade</th>
+                <th className="px-6 py-4 font-semibold">Tipo de Exame</th>
                 <th className="px-6 py-4 font-semibold">Cota Diária</th>
                 <th className="px-6 py-4 font-semibold">Dias de Atendimento</th>
                 <th className="px-6 py-4 font-semibold">Escopo</th>
@@ -158,14 +158,14 @@ export const Specialties: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-              {specialties
+              {ExamTypes
                 .filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()))
                 .map(spec => (
                 <tr key={spec.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors group">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
                       <div className="bg-primary/10 p-2 rounded-lg text-primary">
-                          <Activity className="w-4 h-4" />
+                          <Stethoscope className="w-4 h-4" />
                       </div>
                       <span className="font-medium text-slate-900 dark:text-slate-100">{spec.name}</span>
                     </div>
@@ -205,10 +205,10 @@ export const Specialties: React.FC = () => {
                   </td>
                 </tr>
               ))}
-              {specialties.length === 0 && (
+              {ExamTypes.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
-                    Nenhuma especialidade cadastrada.
+                    Nenhuma Tipo de Exame cadastrada.
                   </td>
                 </tr>
               )}
@@ -220,11 +220,11 @@ export const Specialties: React.FC = () => {
       {showModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl w-full max-w-2xl p-6 border border-slate-100 dark:border-slate-800 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-6">{editingId ? 'Editar Especialidade' : 'Cadastrar Especialidade'}</h3>
+            <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-6">{editingId ? 'Editar Tipo de Exame' : 'Cadastrar Tipo de Exame'}</h3>
             <form onSubmit={handleSave} className="space-y-6">
                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nome da Especialidade</label>
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nome da Tipo de Exame</label>
                       <input 
                         required
                         placeholder="Ex: Cardiologia"
@@ -278,7 +278,7 @@ export const Specialties: React.FC = () => {
 
                     {!formData.isGlobal && (
                         <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-800 space-y-2 mt-2">
-                            <p className="text-sm text-slate-500 mb-2">Selecione as unidades onde esta especialidade atende:</p>
+                            <p className="text-sm text-slate-500 mb-2">Selecione as unidades onde esta Tipo de Exame atende:</p>
                             <div className="max-h-40 overflow-y-auto space-y-1 pr-2">
                                 {units.map(unit => (
                                     <label key={unit.id} className="flex items-center gap-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 p-1.5 rounded">

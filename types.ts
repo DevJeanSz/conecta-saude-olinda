@@ -123,6 +123,15 @@ export interface Specialty {
   cnesCode?: string; // Código padrão DATASUS
 }
 
+export interface ExamType {
+  id: string;
+  name: string;
+  schedule?: DoctorSchedule[];
+  maxDailyAppointments?: number;
+  isGlobal?: boolean;
+  unitIds?: string[];
+}
+
 export interface Notification {
   id: string;
   userId: string;

@@ -25,6 +25,7 @@ import { Register } from './pages/Register';
 import { Reports } from './pages/Reports';
 import { Schedule } from './pages/Schedule';
 import { Specialties } from './pages/Specialties';
+import { ExamTypes } from './pages/ExamTypes';
 import { Units } from './pages/Units';
 import { Users } from './pages/Users';
 import { User, UserRole } from './types';
@@ -254,6 +255,16 @@ const App: React.FC = () => {
             <AdminRoute>
               <ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR]}>
                 <Specialties />
+              </ProtectedRoute>
+            </AdminRoute>
+          )}
+        />
+        <Route
+          path="/admin/exam-types"
+          element={(
+            <AdminRoute>
+              <ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR]}>
+                <ExamTypes />
               </ProtectedRoute>
             </AdminRoute>
           )}

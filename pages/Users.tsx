@@ -38,7 +38,8 @@ export const Users: React.FC = () => {
       const u = JSON.parse(stored);
       setCurrentUser(u);
       setFormData(prev => ({ ...prev, unitId: u.unitId }));
-      setUsers(u.role === UserRole.ADMIN ? await api.users.getAll() : await api.users.getByUnit(u.unitId));
+      const fetchedUsers = u.role === UserRole.ADMIN ? await api.users.getAll() : await api.users.getByUnit(u.unitId);
+      setUsers(fetchedUsers.filter((usr: User) => usr.role !== UserRole.PATIENT));
     }
     setUnits(await api.units.getAll());
     setSpecialties(await api.specialties.getAll());
@@ -115,7 +116,8 @@ export const Users: React.FC = () => {
     }
     
     if (currentUser) {
-        setUsers(currentUser.role === UserRole.ADMIN ? await api.users.getAll() : await api.users.getByUnit(currentUser.unitId));
+        const updatedUsers = currentUser.role === UserRole.ADMIN ? await api.users.getAll() : await api.users.getByUnit(currentUser.unitId);
+        setUsers(updatedUsers.filter((usr: User) => usr.role !== UserRole.PATIENT));
     }
     
     setShowModal(false);

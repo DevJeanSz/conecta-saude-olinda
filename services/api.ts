@@ -1,4 +1,4 @@
-import { User, Patient, Appointment, HealthUnit, Specialty, Notification, Exam, CareHistoryItem, ReminderPreference } from '../types';
+import { User, Patient, Appointment, HealthUnit, Specialty, Notification, Exam, ExamType, CareHistoryItem, ReminderPreference } from '../types';
 
 const SESSION_USER_KEY = 'health_user';
 const ACCESS_TOKEN_KEY = 'auth_token';
@@ -193,6 +193,12 @@ export const api = {
     add: (specialty: Omit<Specialty, 'id'>) => request<Specialty>('/specialties', { method: 'POST', body: JSON.stringify(specialty) }),
     update: (id: string, updates: Partial<Specialty>) => request<Specialty>(`/specialties/${pathId(id)}`, { method: 'PATCH', body: JSON.stringify(updates) }),
     delete: (id: string) => request<void>(`/specialties/${pathId(id)}`, { method: 'DELETE' })
+  },
+  examTypes: {
+    getAll: async () => request<ExamType[]>('/exam-types').catch(() => []),
+    add: (examType: Omit<ExamType, 'id'>) => request<ExamType>('/exam-types', { method: 'POST', body: JSON.stringify(examType) }),
+    update: (id: string, updates: Partial<ExamType>) => request<ExamType>(`/exam-types/${pathId(id)}`, { method: 'PATCH', body: JSON.stringify(updates) }),
+    delete: (id: string) => request<void>(`/exam-types/${pathId(id)}`, { method: 'DELETE' })
   },
   users: {
     getAll: async () => request<User[]>('/users').catch(() => []),

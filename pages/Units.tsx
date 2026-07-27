@@ -7,6 +7,7 @@ import { CnesSyncBanner } from '../components/CnesSyncBanner';
 
 export const Units: React.FC = () => {
   const [units, setUnits] = useState<HealthUnit[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState<Partial<HealthUnit>>({ name: '', address: '', phone: '', cep: '', addressNumber: '', neighborhood: '', city: '', state: '' });
@@ -100,6 +101,13 @@ export const Units: React.FC = () => {
            <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Unidades de Saúde</h2>
            <p className="text-sm text-slate-500 dark:text-slate-400">Postos de atendimento da rede integrados ao CNES</p>
         </div>
+        <button
+          onClick={() => { resetForm(); setShowModal(true); }}
+          className="bg-primary text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-primary/90 transition-colors"
+        >
+          <Plus className="w-5 h-5" />
+          Nova Unidade
+        </button>
       </div>
 
       <CnesSyncBanner 
@@ -109,67 +117,105 @@ export const Units: React.FC = () => {
         onSyncComplete={loadUnits}
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {units.map(unit => (
-          <div key={unit.id} className="bg-white dark:bg-slate-950 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 hover:border-primary dark:hover:border-primary transition-all relative group flex flex-col">
-             <div className="absolute top-4 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                {unit.localOverride && (
-                  <button 
-                      onClick={() => handleRestoreCnes(unit.id)}
-                      className="text-amber-500 hover:text-amber-600 p-1 bg-slate-50 dark:bg-slate-900 rounded-md"
-                      title="Restaurar dados do CNES"
-                  >
-                      <RotateCcw className="w-4 h-4" />
-                  </button>
-                )}
-                <button 
-                    onClick={() => handleEdit(unit)}
-                    className="text-slate-400 hover:text-primary dark:hover:text-primary p-1 bg-slate-50 dark:bg-slate-900 rounded-md"
-                    title="Editar Unidade"
-                >
-                    <Edit2 className="w-4 h-4" />
-                </button>
-                {!unit.cnesCode && (
-                  <button 
-                      onClick={() => handleDeleteUnit(unit.id)}
-                      className="text-slate-400 hover:text-red-600 dark:hover:text-red-500 p-1 bg-slate-50 dark:bg-slate-900 rounded-md"
-                      title="Excluir Unidade"
-                  >
-                      <Trash className="w-4 h-4" />
-                  </button>
-                )}
-             </div>
-             <div className="flex items-start justify-between mb-4">
-               <div className="bg-primary/10 dark:bg-primary/20 p-3 rounded-xl text-primary">
-                  <Building2 className="w-6 h-6" />
-               </div>
-               <div className="flex gap-2">
-                 <span className="text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-2 py-1 rounded">ID: {unit.id}</span>
-                 {unit.cnesCode && (
-                   <span className={`text-xs font-semibold px-2 py-1 rounded ${unit.localOverride ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'}`}>
-                     CNES: {unit.cnesCode} {unit.localOverride && '(Editado)'}
-                   </span>
-                 )}
-               </div>
-             </div>
-             <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2">{unit.name}</h3>
-             <div className="space-y-2 text-sm text-slate-600 dark:text-slate-400 mt-auto">
-                <p className="flex items-center gap-2">
-                  <MapPin className="w-4 h-4 text-slate-400 dark:text-slate-500 shrink-0" />
-                  <span className="truncate" title={unit.address}>{unit.address}</span>
-                </p>
-                <p className="flex items-center gap-2">
-                  <Phone className="w-4 h-4 text-slate-400 dark:text-slate-500 shrink-0" />
-                  {unit.phone}
-                </p>
-                <div className="pt-2 mt-2 border-t border-slate-100 dark:border-slate-800">
-                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-md ${unit.attendanceType === 'SENHA' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'}`}>
-                    Atendimento: {unit.attendanceType === 'SENHA' ? 'Por Senha' : 'Ordem de Chegada'}
-                  </span>
-                </div>
-             </div>
-          </div>
-        ))}
+      <div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row gap-4 items-center justify-between">
+        <div className="relative w-full sm:w-96">
+          <input
+            type="text"
+            placeholder="Buscar por nome, bairro ou CNES..."
+            className="w-full pl-10 pr-4 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-primary focus:outline-none transition-all"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          <Search className="absolute left-3 top-2.5 w-5 h-5 text-slate-400" />
+        </div>
+      </div>
+
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm text-slate-600 dark:text-slate-400">
+            <thead className="bg-slate-50 dark:bg-slate-950/50 text-slate-700 dark:text-slate-300">
+              <tr>
+                <th className="px-6 py-4 font-semibold">Nome da Unidade</th>
+                <th className="px-6 py-4 font-semibold">Endereço / Contato</th>
+                <th className="px-6 py-4 font-semibold">Atendimento</th>
+                <th className="px-6 py-4 font-semibold">CNES</th>
+                <th className="px-6 py-4 font-semibold text-right">Ações</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+              {units
+                .filter(u => 
+                  u.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                  (u.neighborhood || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                  (u.cnesCode || '').includes(searchQuery)
+                )
+                .map(unit => (
+                <tr key={unit.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors group">
+                  <td className="px-6 py-4">
+                    <div className="font-medium text-slate-900 dark:text-slate-100">{unit.name}</div>
+                    <div className="text-xs text-slate-500 mt-1">ID: {unit.id}</div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex flex-col gap-1">
+                      <span className="flex items-center gap-1"><MapPin className="w-3 h-3"/> {unit.address} {unit.neighborhood ? `- ${unit.neighborhood}` : ''}</span>
+                      <span className="flex items-center gap-1"><Phone className="w-3 h-3"/> {unit.phone}</span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-md ${unit.attendanceType === 'SENHA' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'}`}>
+                      {unit.attendanceType === 'SENHA' ? 'Por Senha' : 'Ordem de Chegada'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    {unit.cnesCode ? (
+                      <span className={`text-xs font-semibold px-2 py-1 rounded ${unit.localOverride ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'}`}>
+                        {unit.cnesCode} {unit.localOverride && '(Editado)'}
+                      </span>
+                    ) : (
+                      <span className="text-slate-400">-</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {unit.localOverride && (
+                        <button 
+                            onClick={() => handleRestoreCnes(unit.id)}
+                            className="text-amber-500 hover:text-amber-600 p-1.5 bg-slate-100 dark:bg-slate-800 rounded-md"
+                            title="Restaurar dados do CNES"
+                        >
+                            <RotateCcw className="w-4 h-4" />
+                        </button>
+                      )}
+                      <button 
+                          onClick={() => handleEdit(unit)}
+                          className="text-slate-400 hover:text-primary dark:hover:text-primary p-1.5 bg-slate-100 dark:bg-slate-800 rounded-md"
+                          title="Editar Unidade"
+                      >
+                          <Edit2 className="w-4 h-4" />
+                      </button>
+                      {!unit.cnesCode && (
+                        <button 
+                            onClick={() => handleDeleteUnit(unit.id)}
+                            className="text-slate-400 hover:text-red-600 dark:hover:text-red-500 p-1.5 bg-slate-100 dark:bg-slate-800 rounded-md"
+                            title="Excluir Unidade"
+                        >
+                            <Trash className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {units.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
+                    Nenhuma unidade cadastrada.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {showModal && (

@@ -436,6 +436,15 @@ const ensureSchemaAndSeed = async () => {
     CREATE INDEX IF NOT EXISTS idx_care_events_patient ON care_events(patient_id, date);
     CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, read);
 
+    CREATE TABLE IF NOT EXISTS exam_types (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      name text NOT NULL,
+      schedule jsonb DEFAULT '[]'::jsonb,
+      max_daily_appointments integer,
+      is_global boolean DEFAULT true,
+      unit_ids jsonb DEFAULT '[]'::jsonb,
+      created_at timestamptz NOT NULL DEFAULT now()
+    );
     CREATE TABLE IF NOT EXISTS health_unit_services (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       unit_id uuid NOT NULL REFERENCES units(id) ON DELETE CASCADE,
@@ -964,6 +973,73 @@ app.delete('/api/specialties/:id', authenticate, authorize('ADMIN', 'GENERAL_SUP
   }
 });
 
+const mapExamType = row => ({
+  id: row.id,
+  name: row.name,
+  schedule: row.schedule ?? [],
+  maxDailyAppointments: row.max_daily_appointments ?? undefined,
+  isGlobal: row.is_global ?? true,
+  unitIds: row.unit_ids ? (typeof row.unit_ids === 'string' ? JSON.parse(row.unit_ids) : row.unit_ids) : []
+});
+
+app.get('/api/exam-types', async (_req, res, next) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM exam_types ORDER BY name ASC');
+    return res.json(rows.map(mapExamType));
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.post('/api/exam-types', authenticate, authorize('ADMIN', 'GENERAL_SUPERVISOR'), async (req, res, next) => {
+  try {
+    const name = req.body.name;
+    const schedule = req.body.schedule ? JSON.stringify(req.body.schedule) : '[]';
+    const maxDailyAppointments = req.body.maxDailyAppointments || null;
+    const isGlobal = req.body.isGlobal ?? true;
+    const unitIds = req.body.unitIds ? JSON.stringify(req.body.unitIds) : '[]';
+    
+    const { rows } = await pool.query(
+      'INSERT INTO exam_types (name, schedule, max_daily_appointments, is_global, unit_ids) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [name, schedule, maxDailyAppointments, isGlobal, unitIds]
+    );
+    await audit(req, 'CREATE', 'exam_type', rows[0].id);
+    return res.status(201).json(mapExamType(rows[0]));
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.patch('/api/exam-types/:id', authenticate, authorize('ADMIN', 'GENERAL_SUPERVISOR'), async (req, res, next) => {
+  try {
+    const name = req.body.name;
+    const schedule = req.body.schedule ? JSON.stringify(req.body.schedule) : '[]';
+    const maxDailyAppointments = req.body.maxDailyAppointments || null;
+    const isGlobal = req.body.isGlobal ?? true;
+    const unitIds = req.body.unitIds ? JSON.stringify(req.body.unitIds) : '[]';
+    
+    const { rows } = await pool.query(
+      'UPDATE exam_types SET name = $1, schedule = $2, max_daily_appointments = $3, is_global = $4, unit_ids = $5 WHERE id = $6 RETURNING *',
+      [name, schedule, maxDailyAppointments, isGlobal, unitIds, req.params.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Tipo de exame nao encontrado.' });
+    await audit(req, 'UPDATE', 'exam_type', req.params.id);
+    return res.json(mapExamType(rows[0]));
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.delete('/api/exam-types/:id', authenticate, authorize('ADMIN', 'GENERAL_SUPERVISOR'), async (req, res, next) => {
+  try {
+    await pool.query('DELETE FROM exam_types WHERE id = $1', [req.params.id]);
+    await audit(req, 'DELETE', 'exam_type', req.params.id);
+    res.status(204).end();
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get('/api/users', authenticate, async (req, res, next) => {
   try {
     const unitId = req.query.unitId ? String(req.query.unitId) : null;
@@ -1195,8 +1271,13 @@ app.get('/api/patients', authenticate, async (req, res, next) => {
     }
 
     if (!canManageAllUnits(req)) {
-      params.push(req.user.unitId);
-      where.push(`unit_id = $${params.length}`);
+      if (req.user.role === 'PATIENT') {
+        params.push(req.user.id);
+        where.push(`user_id = $${params.length}`);
+      } else {
+        params.push(req.user.unitId);
+        where.push(`unit_id = $${params.length}`);
+      }
     } else if (req.query.unitId) {
       params.push(String(req.query.unitId));
       where.push(`unit_id = $${params.length}`);
@@ -1665,18 +1746,41 @@ const syncCnes = async () => {
      setSyncProgress({ progress: 15, message: 'Limpando dados inconsistentes...' });
 
       const ibgeCode = '260960'; // Olinda (6 digits - IMPORTANTE: a API só aceita 6 dígitos)
-      const response = await fetch(`https://apidadosabertos.saude.gov.br/cnes/estabelecimentos?codigo_municipio=${ibgeCode}&limit=100`);
-     if (response.ok) {
-        const data = await response.json();
-        const rawEstabelecimentos = data.estabelecimentos || [];
-        // Filtra apenas estabelecimentos públicos (Municipais, Estaduais ou Federais)
-        // Rejeitando os de esfera 'PRIVADA' ou similar.
-        const estabelecimentos = rawEstabelecimentos.filter(est => {
+      let offset = 0;
+      const limit = 20;
+      const allRawEstabelecimentos = [];
+      let hasMore = true;
+      let isSuccess = false;
+
+      setSyncProgress({ progress: 20, message: 'Baixando dados do CNES (isso pode demorar uns instantes)...' });
+
+      while (hasMore) {
+        const response = await fetch(`https://apidadosabertos.saude.gov.br/cnes/estabelecimentos?codigo_municipio=${ibgeCode}&limit=${limit}&offset=${offset}`);
+        if (response.ok) {
+          isSuccess = true;
+          const data = await response.json();
+          const pageEstabs = data.estabelecimentos || [];
+          if (pageEstabs.length === 0) {
+            hasMore = false;
+          } else {
+            allRawEstabelecimentos.push(...pageEstabs);
+            offset += limit;
+          }
+        } else {
+          hasMore = false;
+          console.error('[CNES Sync Error] Falha na request na paginação offset', offset, 'status:', response.status);
+        }
+      }
+
+      if (isSuccess) {
+        // Filtra estabelecimentos públicos OU privados que atendem SUS (hospitais filantrópicos/conveniados)
+        const estabelecimentos = allRawEstabelecimentos.filter(est => {
             const esfera = (est.descricao_esfera_administrativa || '').toUpperCase();
-            return esfera === 'MUNICIPAL' || esfera === 'ESTADUAL' || esfera === 'FEDERAL';
+            const atendeSus = est.estabelecimento_faz_atendimento_ambulatorial_sus === 'SIM';
+            return esfera === 'MUNICIPAL' || esfera === 'ESTADUAL' || esfera === 'FEDERAL' || (esfera === 'PRIVADA' && atendeSus);
         });
 
-        setSyncProgress({ progress: 30, message: `Encontrados ${estabelecimentos.length} estabelecimentos públicos. Atualizando...` });
+        setSyncProgress({ progress: 30, message: `Encontrados ${estabelecimentos.length} estabelecimentos SUS. Atualizando banco...` });
         let processed = 0;
         for (const est of estabelecimentos) {
             await pool.query(`

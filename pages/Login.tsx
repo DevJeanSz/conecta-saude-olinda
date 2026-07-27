@@ -49,6 +49,30 @@ export const Login: React.FC<LoginProps> = ({ onLogin, initialMode = 'PATIENT', 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successUnit, setSuccessUnit] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
+
+  React.useEffect(() => {
+    const savedMode = localStorage.getItem('login_mode') as LoginMode;
+    if (savedMode && !lockedMode) {
+      setMode(savedMode);
+    }
+    
+    if (savedMode === 'PATIENT') {
+      const savedName = localStorage.getItem('patient_name');
+      const savedSus = localStorage.getItem('sus_number');
+      if (savedName) setPatientName(savedName);
+      if (savedSus) {
+        setSusNumber(savedSus);
+        setRememberMe(true);
+      }
+    } else {
+      const savedMatricula = localStorage.getItem('prof_matricula');
+      if (savedMatricula) {
+        setMatricula(savedMatricula);
+        setRememberMe(true);
+      }
+    }
+  }, [lockedMode]);
 
   const switchMode = (nextMode: LoginMode) => {
     if (lockedMode) return;
@@ -77,6 +101,21 @@ export const Login: React.FC<LoginProps> = ({ onLogin, initialMode = 'PATIENT', 
 
       if (response.unit) {
         setSuccessUnit(response.unit.name);
+      }
+
+      // Save credentials if remember me is checked
+      localStorage.setItem('login_mode', mode);
+      if (rememberMe) {
+        if (mode === 'PATIENT') {
+          localStorage.setItem('patient_name', patientName);
+          localStorage.setItem('sus_number', susNumber);
+        } else {
+          localStorage.setItem('prof_matricula', matricula);
+        }
+      } else {
+        localStorage.removeItem('patient_name');
+        localStorage.removeItem('sus_number');
+        localStorage.removeItem('prof_matricula');
       }
 
       window.setTimeout(() => {
@@ -238,7 +277,11 @@ export const Login: React.FC<LoginProps> = ({ onLogin, initialMode = 'PATIENT', 
 
                 <div className="form-helper-row">
                   <label className="checkbox-label">
-                    <input type="checkbox" /> <span>Lembrar meus dados</span>
+                    <input 
+                      type="checkbox" 
+                      checked={rememberMe}
+                      onChange={(e) => setRememberMe(e.target.checked)}
+                    /> <span>Lembrar meus dados</span>
                   </label>
                   <button className="link-button" type="button">
                     Preciso de ajuda

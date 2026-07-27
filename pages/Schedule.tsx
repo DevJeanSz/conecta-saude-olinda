@@ -498,9 +498,6 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
         </div>
         {user.role !== UserRole.DOCTOR && (
           <div className="schedule-hero-actions">
-            <button className="button button-secondary" onClick={() => openAppointmentModal(toDateInputValue(new Date()), getCurrentSlot())} type="button">
-              <Sparkles size={18} /> Agendar agora
-            </button>
             <button className="button button-primary" onClick={() => openAppointmentModal(selectedDate, '09:00')} type="button">
               <Plus size={18} /> Novo agendamento
             </button>

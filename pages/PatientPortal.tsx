@@ -157,7 +157,7 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ user }) => {
     const longitude = Number.parseFloat((selectedUnit?.longitude || '').replace(',', '.'));
     return Number.isFinite(latitude) && Number.isFinite(longitude)
       ? [latitude, longitude]
-      : [-7.784, -34.896];
+      : [-8.0089, -34.8553]; // Fallback para o centro de Olinda
   }, [selectedUnit]);
 
   const loadAppointments = async (targetPatient: Patient | null) => {
@@ -241,8 +241,7 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ user }) => {
 
     const specIds = new Set(doctorsInUnit.map(doctor => doctor.specialtyId).filter(Boolean));
     const specsForUnit = specialties.filter(specialty =>
-      specIds.has(specialty.id) &&
-      (specialty.isGlobal || specialty.unitIds?.includes(unitId))
+      specialty.isGlobal || specialty.unitIds?.includes(unitId)
     );
 
     setDoctors(doctorsInUnit);
