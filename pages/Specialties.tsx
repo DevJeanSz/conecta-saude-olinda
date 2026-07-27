@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Specialty, HealthUnit } from '../types';
 import { api } from '../services/api';
-import { Plus, Trash2, Edit2, Activity } from 'lucide-react';
+import { Plus, Trash2, Edit2, Activity, Search } from 'lucide-react';
 
 const DAYS_OF_WEEK = [
   { id: 1, name: 'Segunda' },
