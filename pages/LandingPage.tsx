@@ -108,13 +108,13 @@ export const LandingPage: React.FC = () => (
         <div className="hero-card-grid">
           <Link to="/login">
             <CalendarDays size={22} aria-hidden="true" />
-            <span>Agendar</span>
-            <small>consulta</small>
+            <span>Marcar consulta</span>
+            <small>unidade e horário</small>
           </Link>
           <Link to="/login">
             <Users size={22} aria-hidden="true" />
-            <span>Acompanhar</span>
-            <small>atendimento</small>
+            <span>Acompanhar cuidado</span>
+            <small>status e histórico</small>
           </Link>
         </div>
       </aside>
@@ -148,11 +148,12 @@ export const LandingPage: React.FC = () => (
 
     <section className="municipal-section" id="projeto">
       <div>
-        <span className="municipal-kicker">Prefeitura Municipal de Olinda</span>
-        <h2>Unidades, equipes e cidadãos no mesmo fluxo</h2>
+        <span className="municipal-kicker">Conheça o projeto</span>
+        <h2>Chega de filas: agora temos o Conecta Saúde</h2>
         <p>
-          O Conecta Saúde Olinda organiza agendamentos, recepção e
-          acompanhamento em uma jornada única para a rede municipal.
+          O projeto nasceu para atender a população que precisa utilizar o
+          sistema público de saúde, reduzindo filas quilométricas e aproximando
+          cada cidadão dos serviços municipais de Olinda.
         </p>
       </div>
       <div className="municipal-stat">

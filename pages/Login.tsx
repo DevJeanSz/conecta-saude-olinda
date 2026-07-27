@@ -133,7 +133,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin, initialMode = 'PATIENT', 
       <section className="auth-visual">
         <div className="auth-visual-pattern" aria-hidden="true" />
         <Link className="auth-back" to="/">
-          <ArrowLeft size={18} /> Voltar ao site
+          <ArrowLeft size={18} /> Página Inicial
         </Link>
         <BrandLockup light />
         <div className="auth-message">

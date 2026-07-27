@@ -29,6 +29,11 @@ interface ScheduleProps {
   user: User;
 }
 
+type PatientLookupFeedback = {
+  type: 'found' | 'not-found';
+  message: string;
+} | null;
+
 const TIME_SLOTS = Array.from({ length: 20 }, (_, index) => {
   const totalMinutes = 8 * 60 + index * 30;
   const hour = Math.floor(totalMinutes / 60);
@@ -97,9 +102,32 @@ const formatDateOption = (value: string) =>
     month: 'long',
   });
 
+const formatPatientAddress = (patient: Patient) => {
+  const street = [patient.address, patient.addressNumber].filter(Boolean).join(', ');
+  const cityState = [patient.city, patient.state].filter(Boolean).join(' - ');
+
+  return [
+    street,
+    patient.neighborhood,
+    cityState,
+    patient.cep ? `CEP ${patient.cep}` : '',
+  ].filter(Boolean).join(' | ');
+};
+
+const getPatientVisibleUnitId = (
+  patient: Patient,
+  visibleUnits: HealthUnit[],
+  fallbackUnitId: string,
+) => {
+  const visibleUnitIds = new Set(visibleUnits.map((availableUnit) => availableUnit.id));
+  const patientUnitIds = [patient.unitId, ...(patient.unitIds || [])].filter(Boolean) as string[];
+  return patientUnitIds.find((unitId) => visibleUnitIds.has(unitId)) || fallbackUnitId;
+};
+
 export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
+  const [patientLookupPool, setPatientLookupPool] = useState<Patient[]>([]);
   const [doctors, setDoctors] = useState<User[]>([]);
   const [specialties, setSpecialties] = useState<Specialty[]>([]);
   const [units, setUnits] = useState<HealthUnit[]>([]);
@@ -112,6 +140,8 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
   const [showNewApptModal, setShowNewApptModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState<Appointment | null>(null);
   const [doctorNotes, setDoctorNotes] = useState('');
+  const [identifiedPatientId, setIdentifiedPatientId] = useState<string | null>(null);
+  const [patientLookupFeedback, setPatientLookupFeedback] = useState<PatientLookupFeedback>(null);
   const [newApptData, setNewApptData] = useState({
     patientName: '',
     susNumber: '',
@@ -144,6 +174,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
       if (!activeUnitId) {
         setAppointments([]);
         setPatients([]);
+        setPatientLookupPool([]);
         setDoctors([]);
         setSpecialties(allSpecialties);
         setUnit(null);
@@ -154,9 +185,15 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
         setSelectedUnitId(activeUnitId);
       }
 
-      const [unitAppts, unitPatients, unitDoctors, unitData] = await Promise.all([
+      const unitPatientsPromise = api.patients.getByUnit(activeUnitId);
+      const patientLookupPromise = canManageAllUnits(user)
+        ? api.patients.getAll()
+        : unitPatientsPromise;
+
+      const [unitAppts, unitPatients, searchablePatients, unitDoctors, unitData] = await Promise.all([
         api.appointments.getByUnit(activeUnitId),
-        api.patients.getByUnit(activeUnitId),
+        unitPatientsPromise,
+        patientLookupPromise,
         api.users.getDoctorsByUnit(activeUnitId),
         api.units.getById(activeUnitId),
       ]);
@@ -167,6 +204,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
 
       setAppointments(scopedAppointments);
       setPatients(unitPatients);
+      setPatientLookupPool(searchablePatients);
       setDoctors(unitDoctors);
       setSpecialties(allSpecialties);
       setUnit(unitData);
@@ -178,6 +216,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
       console.error('Erro ao carregar dados:', error);
       setAppointments([]);
       setPatients([]);
+      setPatientLookupPool([]);
       setDoctors([]);
       setSpecialties([]);
       setUnits([]);
@@ -197,10 +236,19 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
 
   const activeUnitId = selectedUnitId || user.unitId || '';
 
-  const validSpecialties = useMemo(() => specialties.filter((specialty) =>
-    isSpecialtyEnabledForUnit(specialty, activeUnitId) &&
-    doctors.some((doctor) => doctor.specialtyId === specialty.id),
-  ), [activeUnitId, doctors, specialties]);
+  const getSpecialtiesForUnit = (unitId: string) => specialties.filter((specialty) =>
+    isSpecialtyEnabledForUnit(specialty, unitId),
+  );
+
+  const validSpecialties = useMemo(
+    () => getSpecialtiesForUnit(activeUnitId),
+    [activeUnitId, specialties],
+  );
+
+  const appointmentUnitSpecialties = useMemo(
+    () => getSpecialtiesForUnit(newApptData.unitId),
+    [newApptData.unitId, specialties],
+  );
 
   const validSpecialtyIds = useMemo(
     () => validSpecialties.map((specialty) => specialty.id),
@@ -211,7 +259,25 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
     (doctor) => doctor.specialtyId && validSpecialtyIds.includes(doctor.specialtyId),
   ), [doctors, validSpecialtyIds]);
 
-  const patientNameById = useMemo(() => new Map(patients.map((patient) => [patient.id, patient.name])), [patients]);
+  const searchablePatients = useMemo(() => {
+    const map = new Map<string, Patient>();
+    patients.forEach((patient) => map.set(patient.id, patient));
+    patientLookupPool.forEach((patient) => map.set(patient.id, patient));
+    return Array.from(map.values());
+  }, [patientLookupPool, patients]);
+
+  const patientBySusNumber = useMemo(() => {
+    const map = new Map<string, Patient>();
+    searchablePatients.forEach((patient) => {
+      const susDigits = normalizeDigits(patient.susNumber);
+      if (susDigits) {
+        map.set(susDigits, patient);
+      }
+    });
+    return map;
+  }, [searchablePatients]);
+
+  const patientNameById = useMemo(() => new Map(searchablePatients.map((patient) => [patient.id, patient.name])), [searchablePatients]);
   const doctorNameById = useMemo(() => new Map(doctors.map((doctor) => [doctor.id, doctor.name])), [doctors]);
 
   const filteredAppointments = useMemo(() => {
@@ -334,6 +400,8 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
   const openAppointmentModal = (date = selectedDate, time = '') => {
     const defaultUnitId = selectedUnitId || units[0]?.id || user.unitId || '';
     setSelectedDate(date);
+    setIdentifiedPatientId(null);
+    setPatientLookupFeedback(null);
     setNewApptData({
       patientName: '',
       susNumber: '',
@@ -348,6 +416,58 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
       returnVisit: false,
     });
     setShowNewApptModal(true);
+  };
+
+  const handleSusNumberChange = (susNumber: string) => {
+    const susDigits = normalizeDigits(susNumber);
+    const matchedPatient = susDigits ? patientBySusNumber.get(susDigits) : undefined;
+
+    if (!matchedPatient) {
+      setIdentifiedPatientId(null);
+      setPatientLookupFeedback(
+        susDigits.length >= 15
+          ? {
+            type: 'not-found',
+            message: 'Paciente não encontrado. Continue preenchendo os dados manualmente.',
+          }
+          : null,
+      );
+      setNewApptData((current) => ({ ...current, susNumber }));
+      return;
+    }
+
+    const patientUnitId = getPatientVisibleUnitId(
+      matchedPatient,
+      units,
+      newApptData.unitId || selectedUnitId || user.unitId || '',
+    );
+    const patientAddress = formatPatientAddress(matchedPatient);
+
+    if (patientUnitId && patientUnitId !== selectedUnitId) {
+      setSelectedUnitId(patientUnitId);
+    }
+
+    setIdentifiedPatientId(matchedPatient.id);
+    setPatientLookupFeedback({
+      type: 'found',
+      message: 'Paciente encontrado. Dados preenchidos automaticamente.',
+    });
+    setNewApptData((current) => {
+      const unitChanged = Boolean(patientUnitId && patientUnitId !== current.unitId);
+
+      return {
+        ...current,
+        patientName: matchedPatient.name || current.patientName,
+        susNumber: matchedPatient.susNumber || susNumber,
+        cpf: matchedPatient.cpf || current.cpf,
+        rg: matchedPatient.rg || current.rg,
+        address: patientAddress || current.address,
+        unitId: patientUnitId || current.unitId,
+        specialtyId: unitChanged ? '' : current.specialtyId,
+        date: unitChanged ? '' : current.date,
+        time: unitChanged ? '' : current.time,
+      };
+    });
   };
 
   const handleCreateSchedule = async (e: React.FormEvent) => {
@@ -401,7 +521,10 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
 
     const cpfDigits = normalizeDigits(newApptData.cpf);
     const susDigits = normalizeDigits(newApptData.susNumber);
-    const existingPatient = patients.find((patient) =>
+    const linkedPatient = identifiedPatientId
+      ? searchablePatients.find((patient) => patient.id === identifiedPatientId)
+      : undefined;
+    const existingPatient = linkedPatient || searchablePatients.find((patient) =>
       normalizeDigits(patient.cpf) === cpfDigits ||
       Boolean(patient.susNumber && normalizeDigits(patient.susNumber) === susDigits),
     );
@@ -695,7 +818,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
                     Cartão do SUS
                     <input
                       inputMode="numeric"
-                      onChange={(event) => setNewApptData({ ...newApptData, susNumber: event.target.value })}
+                      onChange={(event) => handleSusNumberChange(event.target.value)}
                       placeholder="000 0000 0000 0000"
                       required
                       value={newApptData.susNumber}
@@ -712,6 +835,13 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
                       value={newApptData.cpf}
                     />
                   </label>
+
+                  {patientLookupFeedback && (
+                    <div className={`schedule-lookup-note ${patientLookupFeedback.type}`}>
+                      {patientLookupFeedback.type === 'found' ? <Sparkles size={18} /> : <Info size={18} />}
+                      <span>{patientLookupFeedback.message}</span>
+                    </div>
+                  )}
 
                   <label>
                     RG
@@ -790,7 +920,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
                       value={newApptData.specialtyId}
                     >
                       <option value="">Selecione uma especialidade</option>
-                      {validSpecialties.map((specialty) => (
+                      {appointmentUnitSpecialties.map((specialty) => (
                         <option key={specialty.id} value={specialty.id}>{specialty.name}</option>
                       ))}
                     </select>

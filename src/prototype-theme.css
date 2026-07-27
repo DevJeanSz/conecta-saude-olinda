@@ -434,7 +434,8 @@ button {
 }
 
 .hero-card-grid > div,
-.hero-card-grid > button {
+.hero-card-grid > button,
+.hero-card-grid > a {
   background: rgba(255, 255, 255, 0.12);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 15px;
@@ -4532,12 +4533,13 @@ button {
   border-radius: 18px;
   box-shadow: var(--shadow-lg);
   max-height: calc(100vh - 48px);
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   width: min(560px, 100%);
 }
 
 .schedule-create-card {
-  width: min(760px, 100%);
+  width: min(980px, calc(100vw - 40px));
 }
 
 .schedule-modal-header {
@@ -4582,11 +4584,11 @@ button {
 .schedule-detail-body {
   display: grid;
   gap: 16px;
-  padding: 22px;
+  padding: 20px;
 }
 
 .schedule-create-form {
-  gap: 20px;
+  gap: 16px;
 }
 
 .schedule-form-section {
@@ -4622,14 +4624,16 @@ button {
   font-size: 13px;
   font-weight: 700;
   min-height: 45px;
+  min-width: 0;
   outline: none;
   padding: 0 12px;
+  width: 100%;
 }
 
 .schedule-form textarea,
 .schedule-detail-body textarea {
   line-height: 1.5;
-  min-height: 86px;
+  min-height: 72px;
   padding: 12px;
   resize: vertical;
 }
@@ -4652,12 +4656,46 @@ button {
 
 .schedule-form-grid {
   display: grid;
-  gap: 14px;
-  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.schedule-form-grid > label {
+  min-width: 0;
 }
 
 .schedule-form-grid .field-wide {
   grid-column: 1 / -1;
+}
+
+.schedule-lookup-note {
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  display: flex;
+  font-size: 12px;
+  font-weight: 900;
+  gap: 9px;
+  grid-column: 1 / -1;
+  line-height: 1.35;
+  min-height: 42px;
+  padding: 10px 12px;
+}
+
+.schedule-lookup-note svg {
+  flex: 0 0 auto;
+}
+
+.schedule-lookup-note.found {
+  background: #eaf8ef;
+  border-color: #b9e6c7;
+  color: #087a43;
+}
+
+.schedule-lookup-note.not-found {
+  background: #fff7e6;
+  border-color: #ffd98a;
+  color: #8a5a00;
 }
 
 .schedule-checkbox {
@@ -4678,7 +4716,7 @@ button {
   display: flex;
   gap: 10px;
   justify-content: flex-end;
-  padding: 0 22px 22px;
+  padding: 0 20px 20px;
 }
 
 .schedule-detail-card .schedule-modal-actions {
@@ -4835,6 +4873,177 @@ button {
 .patient-shell textarea {
   border-color: var(--border) !important;
   border-radius: 12px !important;
+}
+
+html.dark {
+  --surface: #0f1b2d;
+  --surface-muted: #14243a;
+  --primary-light: #11355f;
+  --border: #263d5b;
+  --text: #e7f0ff;
+  --text-muted: #9fb1ca;
+  --shadow-sm: 0 8px 20px rgba(0, 0, 0, 0.26);
+  --shadow-md: 0 16px 36px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 24px 64px rgba(0, 0, 0, 0.36);
+  color-scheme: dark;
+}
+
+html.dark body,
+html.dark .admin-page,
+html.dark .auth-page {
+  background: #08111f;
+  color: var(--text);
+}
+
+html.dark input,
+html.dark select,
+html.dark textarea {
+  color-scheme: dark;
+}
+
+html.dark .landing-header,
+html.dark .auth-form-side,
+html.dark .admin-sidebar,
+html.dark .admin-topbar,
+html.dark .schedule-controls,
+html.dark .schedule-calendar-card,
+html.dark .schedule-day-panel,
+html.dark .schedule-modal-card,
+html.dark .admin-dropdown,
+html.dark .service-card,
+html.dark .access-section,
+html.dark .mode-switch button.active,
+html.dark .icon-button {
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+html.dark .admin-unit-chip,
+html.dark .admin-search,
+html.dark .small-search,
+html.dark .schedule-search,
+html.dark .schedule-calendar-header,
+html.dark .schedule-time-cell,
+html.dark .schedule-empty-slot,
+html.dark .schedule-detail-summary,
+html.dark .mode-switch,
+html.dark .dropdown-title,
+html.dark .dropdown-scroll button.unread {
+  background: var(--surface-muted);
+  border-color: var(--border);
+}
+
+html.dark .admin-content-shell .bg-white,
+html.dark .admin-content-shell .dark\:bg-slate-950,
+html.dark .patient-shell .bg-white {
+  background: var(--surface) !important;
+  border-color: var(--border) !important;
+}
+
+html.dark .admin-content-shell input,
+html.dark .admin-content-shell select,
+html.dark .admin-content-shell textarea,
+html.dark .patient-shell input,
+html.dark .patient-shell select,
+html.dark .patient-shell textarea,
+html.dark .schedule-form input,
+html.dark .schedule-form select,
+html.dark .schedule-form textarea,
+html.dark .schedule-detail-body textarea {
+  background: #0b1628 !important;
+  border-color: var(--border) !important;
+  color: var(--text) !important;
+}
+
+html.dark .schedule-form select:disabled,
+html.dark .schedule-form input:disabled,
+html.dark .schedule-form textarea:disabled {
+  background: #111f35 !important;
+  color: #7787a1 !important;
+}
+
+html.dark .brand-copy strong,
+html.dark .admin-topbar h1,
+html.dark .admin-sidebar-footer strong,
+html.dark .auth-card h2,
+html.dark .section-heading h2,
+html.dark .access-section h2,
+html.dark .service-card h3,
+html.dark .schedule-date-controls strong,
+html.dark .schedule-calendar-header strong,
+html.dark .schedule-day-panel h3,
+html.dark .schedule-empty-day strong,
+html.dark .schedule-modal-header h3,
+html.dark .schedule-detail-summary strong,
+html.dark .schedule-day-list strong {
+  color: var(--text);
+}
+
+html.dark .admin-search input,
+html.dark .small-search input,
+html.dark .schedule-search input,
+html.dark .dropdown-scroll button,
+html.dark .profile-dropdown button,
+html.dark .schedule-day-list button {
+  color: var(--text);
+}
+
+html.dark .admin-sidebar nav button:hover,
+html.dark .admin-sidebar-footer button:hover,
+html.dark .schedule-date-controls button:hover,
+html.dark .schedule-calendar-header button:hover,
+html.dark .schedule-calendar-header button.active,
+html.dark .schedule-day-list button:hover,
+html.dark .schedule-modal-header button:hover,
+html.dark .dropdown-scroll button:hover,
+html.dark .profile-dropdown button:hover {
+  background: #182a44;
+}
+
+html.dark .schedule-date-controls button,
+html.dark .schedule-day-list button {
+  background: var(--surface-muted);
+  border-color: var(--border);
+}
+
+html.dark .schedule-slot,
+html.dark .schedule-time-cell {
+  border-bottom-color: #263d5b;
+}
+
+html.dark .schedule-slot {
+  border-left-color: var(--border);
+}
+
+html.dark .schedule-alert {
+  background: #33280d;
+  border-color: #6e5314;
+  color: #ffe8a3;
+}
+
+html.dark .schedule-alert strong {
+  color: #fff1bd;
+}
+
+html.dark .schedule-lookup-note.found {
+  background: #0f3125;
+  border-color: #226a4c;
+  color: #9ee6bf;
+}
+
+html.dark .schedule-lookup-note.not-found {
+  background: #34260b;
+  border-color: #76551b;
+  color: #ffe09a;
+}
+
+html.dark .municipal-section,
+html.dark .schedule-hero {
+  background: linear-gradient(115deg, #06296f, #0b60c9);
+}
+
+html.dark .button-yellow {
+  color: #06296f;
 }
 
 @media (max-width: 860px) {
