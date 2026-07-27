@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import {
+  ArrowLeft,
   Bell,
   Calendar,
   Check,
@@ -82,6 +83,16 @@ export const PatientLayout: React.FC<PatientLayoutProps> = ({ children, user, on
 
   const isActive = (path: string) => location.pathname === path;
   const initials = user.name.split(' ').map(part => part[0]).slice(0, 2).join('').toUpperCase();
+  const showBackButton = location.pathname !== '/patient-portal';
+
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+
+    navigate('/patient-portal');
+  };
 
   return (
     <main className="patient-page">
@@ -152,6 +163,12 @@ export const PatientLayout: React.FC<PatientLayoutProps> = ({ children, user, on
       )}
 
       <div className="patient-shell">
+        {showBackButton && (
+          <button className="patient-back-button" onClick={handleBack} type="button">
+            <ArrowLeft size={18} />
+            Voltar
+          </button>
+        )}
         {children}
       </div>
 

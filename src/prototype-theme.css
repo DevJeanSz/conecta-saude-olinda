@@ -1380,6 +1380,29 @@ button {
   gap: 10px;
 }
 
+.patient-back-button {
+  align-items: center;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  color: var(--primary);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 900;
+  gap: 8px;
+  height: 42px;
+  margin-bottom: 18px;
+  padding: 0 15px;
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.patient-back-button:hover {
+  border-color: rgba(11, 96, 201, 0.35);
+  box-shadow: 0 10px 24px rgba(11, 96, 201, 0.12);
+  transform: translateY(-1px);
+}
+
 .icon-button {
   align-items: center;
   background: white;
