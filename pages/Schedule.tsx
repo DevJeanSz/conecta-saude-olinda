@@ -670,6 +670,8 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
     if (!showDetailModal) return;
     if (showDetailModal.type === 'appointment') {
       await api.appointments.update(showDetailModal.data.id, { notes: doctorNotes });
+    } else {
+      await api.exams.update(showDetailModal.data.id, { notes: doctorNotes });
     }
     setShowDetailModal(null);
     setDoctorNotes('');
@@ -1161,7 +1163,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
             <div className="schedule-modal-header">
               <div>
                 <UserIcon size={24} />
-                <h3>Detalhes da consulta</h3>
+                <h3>{showDetailModal.type === 'appointment' ? 'Detalhes da consulta' : 'Detalhes do exame'}</h3>
               </div>
               <button aria-label="Fechar detalhes" onClick={() => setShowDetailModal(null)} type="button">
                 <X size={22} />
@@ -1182,7 +1184,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
               </div>
 
               <div className="schedule-status-actions">
-                {Object.values(AppointmentStatus).map((status) => (
+                {(showDetailModal.type === 'appointment' ? Object.values(AppointmentStatus) : Object.values(ExamStatus)).map((status) => (
                   <button
                     className={showDetailModal.data.status === status ? 'active' : ''}
                     key={status}

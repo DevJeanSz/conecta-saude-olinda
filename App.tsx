@@ -263,8 +263,8 @@ const App: React.FC = () => {
           path="/admin/exam-types"
           element={(
             <AdminRoute>
-              <ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR]}>
-                <ExamTypes />
+              <ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR, UserRole.ATTENDANT, UserRole.DOCTOR]}>
+                <ExamTypes user={user as User} />
               </ProtectedRoute>
             </AdminRoute>
           )}

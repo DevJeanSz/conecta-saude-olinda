@@ -2703,6 +2703,39 @@ button {
   font-size: 8px;
 }
 
+.counter-selector {
+  color: rgba(255, 255, 255, 0.7);
+  display: grid;
+  font-size: 9px;
+  font-weight: 900;
+  gap: 7px;
+  letter-spacing: 0.09em;
+  margin-top: 18px;
+  text-transform: uppercase;
+}
+
+.counter-selector select {
+  appearance: none;
+  background: rgba(255, 255, 255, 0.13);
+  border: 1px solid rgba(255, 255, 255, 0.23);
+  border-radius: 12px;
+  color: white;
+  font: inherit;
+  letter-spacing: 0;
+  min-height: 43px;
+  outline: 0;
+  padding: 0 13px;
+}
+
+.counter-selector select:focus {
+  border-color: var(--yellow);
+  box-shadow: 0 0 0 3px rgba(255, 207, 34, 0.17);
+}
+
+.counter-selector option {
+  color: var(--navy);
+}
+
 .button-success {
   background: var(--green);
   color: white;
@@ -3009,8 +3042,8 @@ button {
   border-radius: 28px;
   color: white;
   display: grid;
-  gap: 44px;
-  grid-template-columns: minmax(0, 1.45fr) minmax(150px, 0.55fr) minmax(180px, 0.7fr);
+  gap: 28px;
+  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
   margin: 8px auto 80px;
   max-width: 1180px;
   overflow: hidden;
@@ -3043,6 +3076,64 @@ button {
   max-width: 620px;
 }
 
+.project-story-copy {
+  display: grid;
+  gap: 14px;
+}
+
+.project-story-copy strong {
+  color: #fff1ad;
+  font-size: 16px;
+  line-height: 1.55;
+  max-width: 600px;
+}
+
+.project-before-after {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.project-before-after article {
+  background: rgba(255, 255, 255, 0.11);
+  border: 1px solid rgba(255, 255, 255, 0.17);
+  border-radius: 18px;
+  display: grid;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.project-before-after img {
+  aspect-ratio: 4 / 3;
+  display: block;
+  object-fit: cover;
+  width: 100%;
+}
+
+.project-before-after span {
+  color: #a9d5ff;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  padding: 15px 16px 0;
+  text-transform: uppercase;
+}
+
+.project-before-after strong {
+  color: white;
+  font-size: 15px;
+  line-height: 1.35;
+  padding: 5px 16px 16px;
+}
+
+.project-story-stats {
+  display: grid;
+  gap: 18px;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 2px;
+}
+
 .municipal-kicker {
   color: #a9d5ff;
 }
@@ -3065,6 +3156,76 @@ button {
   color: rgba(255, 255, 255, 0.7);
   font-size: 12px;
   line-height: 1.5;
+}
+
+.news-section {
+  margin: 0 auto 82px;
+  max-width: 1180px;
+  padding: 0 24px;
+}
+
+.news-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.news-card {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: var(--shadow-sm);
+  min-height: 240px;
+  padding: 24px;
+}
+
+.news-icon {
+  align-items: center;
+  background: #eaf6ff;
+  border-radius: 14px;
+  color: var(--primary);
+  display: inline-flex;
+  height: 50px;
+  justify-content: center;
+  margin-bottom: 18px;
+  width: 50px;
+}
+
+.news-card:nth-child(2) .news-icon {
+  background: #e3f8ec;
+  color: var(--green);
+}
+
+.news-card:nth-child(3) .news-icon {
+  background: #fff2d7;
+  color: #a15c00;
+}
+
+.news-card:nth-child(4) .news-icon {
+  background: #f0e9ff;
+  color: #6f44b7;
+}
+
+.news-card small {
+  color: var(--primary);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.news-card h3 {
+  color: var(--navy);
+  font-size: 18px;
+  line-height: 1.24;
+  margin: 10px 0 9px;
+}
+
+.news-card p {
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.62;
+  margin: 0;
 }
 
 .access-section {
@@ -3136,11 +3297,15 @@ button {
   }
 
   .municipal-section {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
   }
 
   .municipal-section > div:first-child {
-    grid-column: 1 / -1;
+    grid-column: auto;
+  }
+
+  .news-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .municipal-stat {
@@ -3225,6 +3390,10 @@ button {
     padding: 68px 16px;
   }
 
+  .news-section {
+    padding: 0 16px;
+  }
+
   .section-heading {
     text-align: left;
   }
@@ -3243,6 +3412,22 @@ button {
 
   .municipal-section > div:first-child {
     grid-column: auto;
+  }
+
+  .project-before-after,
+  .project-story-stats,
+  .news-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .project-story-stats .municipal-stat {
+    border-left: 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.19);
+    padding: 20px 0 0;
+  }
+
+  .news-card {
+    min-height: 0;
   }
 
   .access-section {
@@ -4911,6 +5096,7 @@ html.dark .schedule-day-panel,
 html.dark .schedule-modal-card,
 html.dark .admin-dropdown,
 html.dark .service-card,
+html.dark .news-card,
 html.dark .access-section,
 html.dark .mode-switch button.active,
 html.dark .icon-button {
@@ -4969,6 +5155,7 @@ html.dark .auth-card h2,
 html.dark .section-heading h2,
 html.dark .access-section h2,
 html.dark .service-card h3,
+html.dark .news-card h3,
 html.dark .schedule-date-controls strong,
 html.dark .schedule-calendar-header strong,
 html.dark .schedule-day-panel h3,
@@ -5023,6 +5210,10 @@ html.dark .schedule-alert {
 
 html.dark .schedule-alert strong {
   color: #fff1bd;
+}
+
+html.dark .news-card p {
+  color: var(--text-muted);
 }
 
 html.dark .schedule-lookup-note.found {

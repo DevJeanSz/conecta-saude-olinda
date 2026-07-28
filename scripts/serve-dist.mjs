@@ -233,7 +233,8 @@ const mapAppointment = row => ({
   aiSummary: row.ai_summary ?? undefined,
   queuePassword: row.queue_password ?? undefined,
   checkInTime: row.check_in_time ?? undefined,
-  calledAt: row.called_at ?? undefined
+  calledAt: row.called_at ?? undefined,
+  callLocation: row.call_location ?? undefined
 });
 
 const mapExam = row => ({
@@ -247,6 +248,7 @@ const mapExam = row => ({
   status: row.status,
   preparation: row.preparation ?? undefined,
   resultAvailable: row.result_available ?? false,
+  notes: row.notes ?? undefined,
   referralAttachment: row.referral_attachment ?? undefined,
   cancelReason: row.cancel_reason ?? undefined
 });
@@ -373,6 +375,10 @@ const ensureSchemaAndSeed = async () => {
       status text NOT NULL DEFAULT 'SCHEDULED' CHECK (status IN ('SCHEDULED', 'COMPLETED', 'CANCELLED', 'NO_SHOW')),
       notes text,
       ai_summary text,
+      queue_password varchar(50),
+      check_in_time timestamptz,
+      called_at timestamptz,
+      call_location varchar(50),
       created_at timestamptz NOT NULL DEFAULT now()
     );
 
@@ -384,9 +390,12 @@ const ensureSchemaAndSeed = async () => {
       request_code text,
       date date NOT NULL,
       time text NOT NULL,
-      status text NOT NULL DEFAULT 'SCHEDULED' CHECK (status IN ('SCHEDULED', 'AVAILABLE', 'CANCELLED')),
+      status text NOT NULL DEFAULT 'SCHEDULED' CHECK (status IN ('SCHEDULED', 'AVAILABLE', 'CANCELLED', 'NO_SHOW')),
       preparation text,
       result_available boolean NOT NULL DEFAULT false,
+      notes text,
+      referral_attachment text,
+      cancel_reason text,
       created_at timestamptz NOT NULL DEFAULT now()
     );
 
@@ -536,6 +545,12 @@ const ensureSchemaAndSeed = async () => {
     'ALTER TABLE appointments ADD COLUMN IF NOT EXISTS queue_password varchar(50);',
     'ALTER TABLE appointments ADD COLUMN IF NOT EXISTS check_in_time timestamptz;',
     'ALTER TABLE appointments ADD COLUMN IF NOT EXISTS called_at timestamptz;',
+    'ALTER TABLE appointments ADD COLUMN IF NOT EXISTS call_location varchar(50);',
+    'ALTER TABLE exams ADD COLUMN IF NOT EXISTS notes text;',
+    'ALTER TABLE exams ADD COLUMN IF NOT EXISTS referral_attachment text;',
+    'ALTER TABLE exams ADD COLUMN IF NOT EXISTS cancel_reason text;',
+    'ALTER TABLE exams DROP CONSTRAINT IF EXISTS exams_status_check;',
+    'ALTER TABLE exams ADD CONSTRAINT exams_status_check CHECK (status IN (\'SCHEDULED\', \'AVAILABLE\', \'CANCELLED\', \'NO_SHOW\'));',
     'ALTER TABLE units ADD COLUMN IF NOT EXISTS cnes_code text UNIQUE;',
     'ALTER TABLE units ADD COLUMN IF NOT EXISTS razao_social text;',
     'ALTER TABLE units ADD COLUMN IF NOT EXISTS tipo_unidade text;',
@@ -1615,11 +1630,16 @@ app.post('/api/appointments/:id/call', authenticate, authorize('ADMIN', 'GENERAL
     if (!canAccessUnit(req, appointment.unit_id)) return res.status(403).json({ error: 'Acesso negado.' });
     if (!appointment.check_in_time) return res.status(400).json({ error: 'Realize o check-in antes da chamada.' });
 
+    const requestedLocation = req.body?.callLocation
+      ? sanitizeText(String(req.body.callLocation)).slice(0, 50)
+      : null;
+    const callLocation = requestedLocation || appointment.call_location || 'GUICHÊ 01';
+
     const { rows } = await pool.query(
-      'UPDATE appointments SET called_at = now() WHERE id = $1 RETURNING *',
-      [req.params.id]
+      'UPDATE appointments SET called_at = now(), call_location = $1 WHERE id = $2 RETURNING *',
+      [callLocation, req.params.id]
     );
-    await audit(req, 'CALL', 'appointment', req.params.id);
+    await audit(req, 'CALL', 'appointment', req.params.id, { callLocation });
     io.emit('queue_call', mapAppointment(rows[0]));
     return res.json(mapAppointment(rows[0]));
   } catch (error) {
@@ -1635,7 +1655,7 @@ app.patch('/api/appointments/:id', authenticate, async (req, res, next) => {
 
     const row = current.rows[0];
     const { rows } = await pool.query(
-      `UPDATE appointments SET date=$1, time=$2, status=$3, notes=$4, ai_summary=$5, queue_password=$6, check_in_time=$7, called_at=$8 WHERE id=$9 RETURNING *`,
+      `UPDATE appointments SET date=$1, time=$2, status=$3, notes=$4, ai_summary=$5, queue_password=$6, check_in_time=$7, called_at=$8, call_location=$9 WHERE id=$10 RETURNING *`,
       [
         req.body.date ?? row.date, 
         req.body.time ?? row.time, 
@@ -1645,6 +1665,7 @@ app.patch('/api/appointments/:id', authenticate, async (req, res, next) => {
         req.body.queuePassword !== undefined ? req.body.queuePassword : row.queue_password,
         req.body.checkInTime !== undefined ? req.body.checkInTime : row.check_in_time,
         req.body.calledAt !== undefined ? req.body.calledAt : row.called_at,
+        req.body.callLocation !== undefined ? sanitizeText(String(req.body.callLocation)).slice(0, 50) : row.call_location,
         req.params.id
       ]
     );
@@ -1715,10 +1736,54 @@ app.post('/api/exams', authenticate, async (req, res, next) => {
   }
 });
 
+app.patch('/api/exams/:id', authenticate, authorize('ADMIN', 'GENERAL_SUPERVISOR', 'ATTENDANT', 'DOCTOR'), async (req, res, next) => {
+  try {
+    const current = await pool.query('SELECT * FROM exams WHERE id = $1', [req.params.id]);
+    const row = current.rows[0];
+    if (!row) return res.status(404).json({ error: 'Exame nao encontrado.' });
+    if (!canAccessUnit(req, row.unit_id)) return res.status(403).json({ error: 'Acesso negado.' });
+
+    const allowedStatuses = ['SCHEDULED', 'AVAILABLE', 'CANCELLED', 'NO_SHOW'];
+    const nextStatus = req.body.status ? sanitizeText(String(req.body.status)) : row.status;
+    if (!allowedStatuses.includes(nextStatus)) {
+      return res.status(400).json({ error: 'Status de exame invalido.' });
+    }
+
+    const nextResultAvailable = req.body.resultAvailable !== undefined
+      ? Boolean(req.body.resultAvailable)
+      : (nextStatus === 'AVAILABLE' ? true : row.result_available);
+
+    const { rows } = await pool.query(
+      `UPDATE exams
+       SET date = $1, time = $2, status = $3, preparation = $4, result_available = $5, notes = $6, cancel_reason = $7
+       WHERE id = $8
+       RETURNING *`,
+      [
+        req.body.date ?? row.date,
+        req.body.time ?? row.time,
+        nextStatus,
+        req.body.preparation !== undefined ? sanitizeText(String(req.body.preparation)).slice(0, 500) : row.preparation,
+        nextResultAvailable,
+        req.body.notes !== undefined ? sanitizeText(String(req.body.notes)).slice(0, 500) : row.notes,
+        req.body.cancelReason !== undefined ? sanitizeText(String(req.body.cancelReason)).slice(0, 500) : row.cancel_reason,
+        req.params.id
+      ]
+    );
+
+    await audit(req, 'UPDATE', 'exam', req.params.id, { status: nextStatus });
+    return res.json(mapExam(rows[0]));
+  } catch (error) {
+    return next(error);
+  }
+});
+
 app.patch('/api/exams/:id/cancel', authenticate, async (req, res, next) => {
   try {
     const reason = requireText(req.body.reason, 'motivo do cancelamento');
-    const { rows } = await pool.query('UPDATE exams SET status = $1, cancel_reason = $2 WHERE id = $3 RETURNING *', [ExamStatus.CANCELLED, reason, req.params.id]);
+    const current = await pool.query('SELECT * FROM exams WHERE id = $1', [req.params.id]);
+    if (!current.rows[0]) return res.status(404).json({ error: 'Exame nao encontrado.' });
+    if (!canAccessUnit(req, current.rows[0].unit_id)) return res.status(403).json({ error: 'Acesso negado.' });
+    const { rows } = await pool.query('UPDATE exams SET status = $1, cancel_reason = $2 WHERE id = $3 RETURNING *', ['CANCELLED', reason, req.params.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Exame não encontrado.' });
     await audit(req, 'UPDATE', 'exam', req.params.id);
     return res.json(mapExam(rows[0]));

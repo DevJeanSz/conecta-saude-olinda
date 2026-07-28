@@ -18,11 +18,14 @@ interface ReceptionProps {
   user: User;
 }
 
+const COUNTER_OPTIONS = ['GUICHÊ 01', 'GUICHÊ 02', 'GUICHÊ 03', 'GUICHÊ 04', 'GUICHÊ 05'];
+
 export const Reception: React.FC<ReceptionProps> = ({ user }) => {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [doctors, setDoctors] = useState<User[]>([]);
   const [unit, setUnit] = useState<HealthUnit | null>(null);
+  const [selectedCounter, setSelectedCounter] = useState(COUNTER_OPTIONS[0]);
   const [showConfig, setShowConfig] = useState(false);
   const [configForm, setConfigForm] = useState({ toleranceMinutes: 15, autoCancelNoShow: true });
 
@@ -66,8 +69,8 @@ export const Reception: React.FC<ReceptionProps> = ({ user }) => {
     loadData();
   };
 
-  const callToTV = async (apptId: string) => {
-    await api.appointments.call(apptId);
+  const callToTV = async (apptId: string, callLocation = selectedCounter) => {
+    await api.appointments.call(apptId, callLocation);
     loadData();
   };
 
@@ -87,8 +90,8 @@ export const Reception: React.FC<ReceptionProps> = ({ user }) => {
   const getInitials = (name: string) => name.split(' ').map(part => part[0]).slice(0, 2).join('').toUpperCase();
 
   const isSenhaMode = unit?.attendanceType === 'SENHA';
-  const waitingQueue = appointments.filter(appointment => appointment.checkInTime && appointment.status !== AppointmentStatus.COMPLETED);
-  const expectedToday = appointments.filter(appointment => !appointment.checkInTime);
+  const waitingQueue = appointments.filter(appointment => appointment.checkInTime && !appointment.calledAt && appointment.status === AppointmentStatus.SCHEDULED);
+  const expectedToday = appointments.filter(appointment => !appointment.checkInTime && appointment.status === AppointmentStatus.SCHEDULED);
   const currentCall = useMemo(
     () => appointments.filter(appointment => appointment.calledAt).sort((a, b) => new Date(b.calledAt!).getTime() - new Date(a.calledAt!).getTime())[0],
     [appointments],
@@ -96,6 +99,7 @@ export const Reception: React.FC<ReceptionProps> = ({ user }) => {
   const preferentialCount = waitingQueue.filter(appointment => appointment.queuePassword?.startsWith('P-')).length;
   const averageWait = waitingQueue.length ? `${Math.max(1, Math.round(waitingQueue.length * 4))} min` : '0 min';
   const nextWaiting = waitingQueue[0];
+  const activeCounter = currentCall?.callLocation || selectedCounter;
 
   return (
     <div className="reception-content">
@@ -203,10 +207,18 @@ export const Reception: React.FC<ReceptionProps> = ({ user }) => {
           <span className="call-kicker">
             <span /> Chamada atual
           </span>
+          <label className="counter-selector">
+            Guichê do recepcionista
+            <select value={selectedCounter} onChange={(event) => setSelectedCounter(event.target.value)}>
+              {COUNTER_OPTIONS.map(counter => (
+                <option key={counter} value={counter}>{counter}</option>
+              ))}
+            </select>
+          </label>
           <div className="ticket-display">
             <small>SENHA</small>
             <strong>{currentCall?.queuePassword || nextWaiting?.queuePassword || '--'}</strong>
-            <span>GUICHÊ 02</span>
+            <span>{activeCounter}</span>
           </div>
           <div className="called-person">
             <span>{getInitials(currentCall ? getPatientName(currentCall.patientId) : nextWaiting ? getPatientName(nextWaiting.patientId) : 'CS')}</span>
@@ -226,16 +238,16 @@ export const Reception: React.FC<ReceptionProps> = ({ user }) => {
           <button
             className="button button-secondary"
             disabled={!currentCall}
-            onClick={() => currentCall && callToTV(currentCall.id)}
+            onClick={() => currentCall && callToTV(currentCall.id, currentCall.callLocation || selectedCounter)}
             type="button"
           >
             Repetir chamada
           </button>
-          {nextWaiting && (
+          {currentCall && (
             <button
               className="button button-secondary"
               onClick={async () => {
-                await api.appointments.update(nextWaiting.id, { status: AppointmentStatus.COMPLETED });
+                await api.appointments.update(currentCall.id, { status: AppointmentStatus.COMPLETED });
                 loadData();
               }}
               type="button"

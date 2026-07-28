@@ -3,9 +3,12 @@ import { Link } from 'react-router-dom';
 import {
   Accessibility,
   ArrowRight,
+  BellRing,
   CalendarDays,
   CheckCircle2,
+  HeartPulse,
   MapPin,
+  Newspaper,
   ShieldCheck,
   Sparkles,
   Stethoscope,
@@ -13,6 +16,8 @@ import {
 } from 'lucide-react';
 import { BrandLockup } from '../components/BrandLockup';
 import { PernambucoStripe } from '../components/VisualPrimitives';
+import beforeCareImage from '../src/assets/images/projeto-antes-fila-ubs.png';
+import afterCareImage from '../src/assets/images/projeto-depois-agendamento-celular.png';
 
 const landingServices = [
   {
@@ -32,6 +37,33 @@ const landingServices = [
   },
 ];
 
+const healthNews = [
+  {
+    icon: Newspaper,
+    tag: 'Rede municipal',
+    title: 'Novas UBS e melhorias nos serviços',
+    description: 'Acompanhe inaugurações, reformas e ampliações que deixam o atendimento mais perto dos bairros de Olinda.',
+  },
+  {
+    icon: ShieldCheck,
+    tag: 'Prevenção',
+    title: 'Campanha contra o tabagismo',
+    description: 'Informação, acolhimento e orientação para quem deseja parar de fumar e cuidar melhor da saúde respiratória.',
+  },
+  {
+    icon: HeartPulse,
+    tag: 'Cuidado mensal',
+    title: 'Setembro Amarelo e saúde mental',
+    description: 'Cada mês ganha uma pauta de conscientização para fortalecer prevenção, escuta e cuidado com a população.',
+  },
+  {
+    icon: BellRing,
+    tag: 'Avisos úteis',
+    title: 'Vacinação, exames e mutirões',
+    description: 'Fique por dentro de campanhas, horários especiais e ações municipais organizadas pela Secretaria de Saúde.',
+  },
+];
+
 export const LandingPage: React.FC = () => (
   <main className="landing-page">
     <PernambucoStripe />
@@ -43,6 +75,7 @@ export const LandingPage: React.FC = () => (
       <nav className="landing-nav" aria-label="Navegação principal">
         <a href="#servicos">Serviços</a>
         <a href="#projeto">Sobre o projeto</a>
+        <a href="#noticias">Fique por dentro</a>
         <a href="#unidades">Unidades</a>
       </nav>
 
@@ -146,8 +179,8 @@ export const LandingPage: React.FC = () => (
       </div>
     </section>
 
-    <section className="municipal-section" id="projeto">
-      <div>
+    <section className="municipal-section project-story" id="projeto">
+      <div className="project-story-copy">
         <span className="municipal-kicker">Conheça o projeto</span>
         <h2>Chega de filas: agora temos o Conecta Saúde</h2>
         <p>
@@ -155,14 +188,57 @@ export const LandingPage: React.FC = () => (
           sistema público de saúde, reduzindo filas quilométricas e aproximando
           cada cidadão dos serviços municipais de Olinda.
         </p>
+        <strong>
+          Prefeitura de Olinda trabalhando para melhor servir a população olindense.
+        </strong>
       </div>
-      <div className="municipal-stat">
-        <strong>24h</strong>
-        <span>portal disponível para solicitações</span>
+
+      <div className="project-before-after">
+        <article>
+          <img src={beforeCareImage} alt="Moradores aguardando em fila para atendimento em uma unidade de saúde" />
+          <span>Antes</span>
+          <strong>Horas em filas para tentar uma ficha</strong>
+        </article>
+        <article>
+          <img src={afterCareImage} alt="Cidadã usando o Conecta Saúde no celular para agendar atendimento em casa" />
+          <span>Agora</span>
+          <strong>Agendamento pelo celular, com mais conforto e clareza</strong>
+        </article>
       </div>
-      <div className="municipal-stat" id="unidades">
-        <strong>Rede única</strong>
-        <span>unidades e equipes conectadas</span>
+
+      <div className="project-story-stats" id="unidades">
+        <div className="municipal-stat">
+          <strong>24h</strong>
+          <span>portal disponível para solicitações</span>
+        </div>
+        <div className="municipal-stat">
+          <strong>Rede única</strong>
+          <span>unidades e equipes conectadas</span>
+        </div>
+      </div>
+    </section>
+
+    <section className="news-section" id="noticias">
+      <div className="section-heading">
+        <span>Fique por dentro</span>
+        <h2>Notícias e campanhas de saúde para a população</h2>
+        <p>
+          Um espaço para acompanhar novidades da saúde de Olinda, campanhas de
+          conscientização e orientações importantes ao longo do ano.
+        </p>
+      </div>
+
+      <div className="news-grid">
+        {healthNews.map(({ icon: Icon, tag, title, description }) => (
+          <article className="news-card" key={title}>
+            <span className="news-icon">
+              <Icon size={22} aria-hidden="true" />
+            </span>
+            <small>{tag}</small>
+            <h3>{title}</h3>
+            <p>{description}</p>
+          </article>
+        ))}
       </div>
     </section>
 

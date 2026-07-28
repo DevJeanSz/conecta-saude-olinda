@@ -67,6 +67,8 @@ export const DisplayTV: React.FC<DisplayTVProps> = ({ user }) => {
     return getDoctorName(appointment.doctorId).toUpperCase() || 'ATENDIMENTO';
   };
   const getCallLocation = (appointment: Appointment, index: number) => {
+    if (appointment.callLocation) return appointment.callLocation;
+
     if (appointment.queuePassword?.startsWith('P-') || appointment.queuePassword?.startsWith('E-')) {
       return `SALA ${String(index + 2).padStart(2, '0')}`;
     }
@@ -80,7 +82,7 @@ export const DisplayTV: React.FC<DisplayTVProps> = ({ user }) => {
 
       try {
         const msg = new SpeechSynthesisUtterance();
-        msg.text = `Senha. ${currentCall.queuePassword}. Paciente. ${getPatientName(currentCall.patientId)}. Consultório do doutor. ${getDoctorName(currentCall.doctorId)}`;
+        msg.text = `Senha. ${currentCall.queuePassword}. Paciente. ${getPatientName(currentCall.patientId)}. Dirija-se ao ${getCallLocation(currentCall, 0)}.`;
         msg.lang = 'pt-BR';
         window.speechSynthesis.speak(msg);
       } catch (error) {

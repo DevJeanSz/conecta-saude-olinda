@@ -216,6 +216,7 @@ export interface Appointment {
   queuePassword?: string;
   checkInTime?: string;
   calledAt?: string;
+  callLocation?: string;
 }
 
 export interface Exam {

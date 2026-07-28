@@ -34,7 +34,7 @@ const menuItems = [
   { label: 'Unidades', path: '/admin/units', icon: Building2, roles: [UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR] },
   { label: 'Equipe', path: '/admin/users', icon: UserPlus, roles: [UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR] },
   { label: 'Especialidades', path: '/admin/specialties', icon: ListPlus, roles: [UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR] },
-  { label: 'Exames', path: '/admin/exam-types', icon: Search, roles: [UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR] },
+  { label: 'Exames', path: '/admin/exam-types', icon: Search, roles: [UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR, UserRole.ATTENDANT, UserRole.DOCTOR] },
   { label: 'Pacientes', path: '/admin/patients', icon: Users, roles: [UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR, UserRole.ATTENDANT, UserRole.SOCIAL_WORKER] },
   { label: 'Agendamentos', path: '/admin/schedule', icon: Calendar, roles: [UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR, UserRole.ATTENDANT, UserRole.DOCTOR] },
   { label: 'Recepção e Senhas', path: '/admin/reception', icon: MonitorPlay, roles: [UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR, UserRole.ATTENDANT] },
