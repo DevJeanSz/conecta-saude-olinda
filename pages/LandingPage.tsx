@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Accessibility,
@@ -7,15 +7,21 @@ import {
   CalendarDays,
   CheckCircle2,
   HeartPulse,
+  Megaphone,
   MapPin,
   Newspaper,
   ShieldCheck,
   Sparkles,
   Stethoscope,
+  Syringe,
   Users,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { BrandLockup } from '../components/BrandLockup';
 import { PernambucoStripe } from '../components/VisualPrimitives';
+import { api } from '../services/api';
+import { HealthPostIcon } from '../types';
+import { buildDefaultHealthPosts, getHealthPostIconMeta } from '../src/healthPosts';
 import beforeCareImage from '../src/assets/images/projeto-antes-fila-ubs.png';
 import afterCareImage from '../src/assets/images/projeto-depois-agendamento-celular.png';
 
@@ -37,34 +43,38 @@ const landingServices = [
   },
 ];
 
-const healthNews = [
-  {
-    icon: Newspaper,
-    tag: 'Rede municipal',
-    title: 'Novas UBS e melhorias nos serviços',
-    description: 'Acompanhe inaugurações, reformas e ampliações que deixam o atendimento mais perto dos bairros de Olinda.',
-  },
-  {
-    icon: ShieldCheck,
-    tag: 'Prevenção',
-    title: 'Campanha contra o tabagismo',
-    description: 'Informação, acolhimento e orientação para quem deseja parar de fumar e cuidar melhor da saúde respiratória.',
-  },
-  {
-    icon: HeartPulse,
-    tag: 'Cuidado mensal',
-    title: 'Setembro Amarelo e saúde mental',
-    description: 'Cada mês ganha uma pauta de conscientização para fortalecer prevenção, escuta e cuidado com a população.',
-  },
-  {
-    icon: BellRing,
-    tag: 'Avisos úteis',
-    title: 'Vacinação, exames e mutirões',
-    description: 'Fique por dentro de campanhas, horários especiais e ações municipais organizadas pela Secretaria de Saúde.',
-  },
-];
+const healthPostIcons: Record<HealthPostIcon, LucideIcon> = {
+  shield: ShieldCheck,
+  heart: HeartPulse,
+  bell: BellRing,
+  newspaper: Newspaper,
+  calendar: CalendarDays,
+  stethoscope: Stethoscope,
+  syringe: Syringe,
+  megaphone: Megaphone,
+};
 
-export const LandingPage: React.FC = () => (
+export const LandingPage: React.FC = () => {
+  const fallbackPosts = useMemo(() => buildDefaultHealthPosts(), []);
+  const [healthPosts, setHealthPosts] = useState(fallbackPosts);
+
+  useEffect(() => {
+    let active = true;
+
+    api.healthPosts.getPublished()
+      .then(posts => {
+        if (active && posts.length > 0) setHealthPosts(posts);
+      })
+      .catch(() => {
+        if (active) setHealthPosts(fallbackPosts);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [fallbackPosts]);
+
+  return (
   <main className="landing-page">
     <PernambucoStripe />
     <header className="landing-header">
@@ -221,24 +231,39 @@ export const LandingPage: React.FC = () => (
     <section className="news-section" id="noticias">
       <div className="section-heading">
         <span>Fique por dentro</span>
-        <h2>Notícias e campanhas de saúde para a população</h2>
+        <h2>Informação que ajuda você a cuidar da sua família</h2>
         <p>
-          Um espaço para acompanhar novidades da saúde de Olinda, campanhas de
-          conscientização e orientações importantes ao longo do ano.
+          Quando a saúde chama, ninguém quer ficar perdido. Aqui você encontra
+          avisos da rede de Olinda, campanhas e orientações simples para se
+          preparar melhor e cuidar de quem está perto.
         </p>
       </div>
 
       <div className="news-grid">
-        {healthNews.map(({ icon: Icon, tag, title, description }) => (
-          <article className="news-card" key={title}>
-            <span className="news-icon">
-              <Icon size={22} aria-hidden="true" />
-            </span>
-            <small>{tag}</small>
-            <h3>{title}</h3>
-            <p>{description}</p>
-          </article>
-        ))}
+        {healthPosts.map((post) => {
+          const iconMeta = getHealthPostIconMeta(post.icon);
+          const Icon = healthPostIcons[post.icon] || Newspaper;
+          return (
+            <article
+              className="news-card"
+              key={post.id}
+              style={{
+                '--news-accent': iconMeta.accent,
+                '--news-accent-secondary': iconMeta.accentSecondary,
+              } as React.CSSProperties}
+            >
+              <img className="news-card-image" src={post.imageUrl} alt="" />
+              <div className="news-card-body">
+                <span className="news-icon">
+                  <Icon size={22} aria-hidden="true" />
+                </span>
+                <small>{post.context}</small>
+                <h3>{post.title}</h3>
+                <p>{post.text}</p>
+              </div>
+            </article>
+          );
+        })}
       </div>
     </section>
 
@@ -258,4 +283,5 @@ export const LandingPage: React.FC = () => (
       <p>Prefeitura Municipal de Olinda • Saúde pública mais conectada.</p>
     </footer>
   </main>
-);
+  );
+};

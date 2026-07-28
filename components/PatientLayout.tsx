@@ -46,6 +46,12 @@ const drawerItems = [
   { label: 'Informações', path: '/patient-portal/information', icon: Info },
 ];
 
+const mergeNotifications = (current: Notification[], incoming: Notification[]) => {
+  const byId = new Map<string, Notification>();
+  [...incoming, ...current].forEach(notification => byId.set(notification.id, notification));
+  return Array.from(byId.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+};
+
 export const PatientLayout: React.FC<PatientLayoutProps> = ({ children, user, onLogout }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -57,17 +63,23 @@ export const PatientLayout: React.FC<PatientLayoutProps> = ({ children, user, on
   useEffect(() => {
     if (!user?.id) return;
 
-    api.notifications.getForUser()
-      .then(notifs => setNotifications(Array.isArray(notifs) ? notifs : []))
-      .catch(() => setNotifications([]));
+    const loadNotifications = () => {
+      api.notifications.getForUser()
+        .then(notifs => setNotifications(prev => mergeNotifications(prev, Array.isArray(notifs) ? notifs : [])))
+        .catch(() => setNotifications([]));
+    };
+
+    loadNotifications();
+    const interval = window.setInterval(loadNotifications, 60000);
 
     const socket = io(apiOrigin);
     socket.emit('join', user.id);
     socket.on('new_notification', (notif: Notification) => {
-      setNotifications(prev => [notif, ...prev]);
+      setNotifications(prev => mergeNotifications(prev, [notif]));
     });
 
     return () => {
+      window.clearInterval(interval);
       socket.disconnect();
     };
   }, [user.id]);
@@ -78,8 +90,12 @@ export const PatientLayout: React.FC<PatientLayoutProps> = ({ children, user, on
   };
 
   const markAsRead = async (id: string) => {
-    await api.notifications.markAsRead(id);
-    setNotifications(prev => prev.filter(notification => notification.id !== id));
+    try {
+      await api.notifications.markAsRead(id);
+      setNotifications(prev => prev.filter(notification => notification.id !== id));
+    } catch {
+      setNotifications(prev => prev.filter(notification => notification.id !== id));
+    }
   };
 
   const isActive = (path: string) => location.pathname === path;

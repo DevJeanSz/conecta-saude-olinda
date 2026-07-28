@@ -147,6 +147,31 @@ export interface Notification {
   reference_id?: string;
 }
 
+export type HealthPostIcon =
+  | 'shield'
+  | 'heart'
+  | 'bell'
+  | 'newspaper'
+  | 'calendar'
+  | 'stethoscope'
+  | 'syringe'
+  | 'megaphone';
+
+export interface HealthPost {
+  id: string;
+  title: string;
+  context: string;
+  text: string;
+  icon: HealthPostIcon;
+  imageUrl: string;
+  published: boolean;
+  displayOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type HealthPostPayload = Omit<HealthPost, 'id' | 'createdAt' | 'updatedAt'>;
+
 export interface User {
   id: string;
   name: string;

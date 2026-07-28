@@ -1,4 +1,4 @@
-import { User, Patient, Appointment, HealthUnit, Specialty, Notification, Exam, ExamType, CareHistoryItem, ReminderPreference } from '../types';
+import { User, Patient, Appointment, HealthUnit, Specialty, Notification, Exam, ExamType, CareHistoryItem, ReminderPreference, HealthPost, HealthPostPayload } from '../types';
 
 const SESSION_USER_KEY = 'health_user';
 const ACCESS_TOKEN_KEY = 'auth_token';
@@ -199,6 +199,13 @@ export const api = {
     add: (examType: Omit<ExamType, 'id'>) => request<ExamType>('/exam-types', { method: 'POST', body: JSON.stringify(examType) }),
     update: (id: string, updates: Partial<ExamType>) => request<ExamType>(`/exam-types/${pathId(id)}`, { method: 'PATCH', body: JSON.stringify(updates) }),
     delete: (id: string) => request<void>(`/exam-types/${pathId(id)}`, { method: 'DELETE' })
+  },
+  healthPosts: {
+    getPublished: async () => request<HealthPost[]>('/health-posts').catch(() => []),
+    getAll: async () => request<HealthPost[]>('/admin/health-posts').catch(() => []),
+    add: (post: HealthPostPayload) => request<HealthPost>('/admin/health-posts', { method: 'POST', body: JSON.stringify(post) }),
+    update: (id: string, updates: Partial<HealthPostPayload>) => request<HealthPost>(`/admin/health-posts/${pathId(id)}`, { method: 'PATCH', body: JSON.stringify(updates) }),
+    delete: (id: string) => request<void>(`/admin/health-posts/${pathId(id)}`, { method: 'DELETE' })
   },
   users: {
     getAll: async () => request<User[]>('/users').catch(() => []),

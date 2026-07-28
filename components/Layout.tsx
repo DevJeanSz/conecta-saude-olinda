@@ -13,6 +13,7 @@ import {
   MapPin,
   MonitorPlay,
   Moon,
+  Newspaper,
   Search,
   Sun,
   UserPlus,
@@ -38,6 +39,7 @@ const menuItems = [
   { label: 'Pacientes', path: '/admin/patients', icon: Users, roles: [UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR, UserRole.ATTENDANT, UserRole.SOCIAL_WORKER] },
   { label: 'Agendamentos', path: '/admin/schedule', icon: Calendar, roles: [UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR, UserRole.ATTENDANT, UserRole.DOCTOR] },
   { label: 'Recepção e Senhas', path: '/admin/reception', icon: MonitorPlay, roles: [UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR, UserRole.ATTENDANT] },
+  { label: 'Publicações', path: '/admin/health-posts', icon: Newspaper, roles: [UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR] },
   { label: 'Relatórios', path: '/admin/reports', icon: FileText, roles: [UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR] },
 ];
 
@@ -50,6 +52,7 @@ const pageTitles: Record<string, string> = {
   '/admin/patients': 'Pacientes',
   '/admin/schedule': 'Agendamentos',
   '/admin/reception': 'Painel da Recepção',
+  '/admin/health-posts': 'Publicações',
   '/admin/reports': 'Relatórios',
   '/perfil': 'Meu perfil',
 };

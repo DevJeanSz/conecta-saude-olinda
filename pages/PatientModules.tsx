@@ -34,6 +34,7 @@ import {
   ExamStatus,
   ExamType,
   HealthUnit,
+  Notification,
   Patient,
   ReminderPreference,
   User,
@@ -774,6 +775,81 @@ export const PatientRemindersPage: React.FC<PatientPageProps> = ({ user }) => {
   const [preferences, setPreferences] = useState<ReminderPreference>(defaultPreference);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState('');
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [upcomingCare, setUpcomingCare] = useState<Array<{
+    id: string;
+    kind: 'Consulta' | 'Exame';
+    title: string;
+    detail: string;
+    dateTime: Date;
+  }>>([]);
+  const [loading, setLoading] = useState(true);
+
+  const refreshReminders = async () => {
+    setLoading(true);
+    try {
+      const [savedPreferences, reminderNotifications, patientData, unitData] = await Promise.all([
+        api.reminders.getPreferences().catch(() => null),
+        api.notifications.getForUser().catch(() => []),
+        loadPatient(user),
+        api.units.getAll().catch(() => []),
+      ]);
+
+      if (savedPreferences) setPreferences(savedPreferences);
+      setNotifications(
+        reminderNotifications.filter(notification => {
+          const type = notification.type || '';
+          return type.includes('REMINDER')
+            || type === 'EXAM_RESULT'
+            || type.endsWith('_CREATED')
+            || notification.message.toLocaleLowerCase('pt-BR').includes('lembrete');
+        }),
+      );
+
+      if (!patientData) {
+        setUpcomingCare([]);
+        return;
+      }
+
+      const [appointments, exams, doctors] = await Promise.all([
+        api.appointments.getByPatientId(patientData.id),
+        api.exams.getByPatientId(patientData.id),
+        api.users.getAll().catch(() => []),
+      ]);
+      const unitById = new Map<string, string>(unitData.map(unit => [unit.id, unit.name] as const));
+      const doctorById = new Map<string, string>(doctors.map(doctor => [doctor.id, doctor.name] as const));
+      const now = new Date();
+
+      const appointmentCare = appointments
+        .filter(appointment => appointment.status === AppointmentStatus.SCHEDULED)
+        .map(appointment => ({
+          id: `appointment-${appointment.id}`,
+          kind: 'Consulta' as const,
+          title: doctorById.get(appointment.doctorId) || 'Consulta agendada',
+          detail: unitById.get(appointment.unitId) || 'Rede municipal de saúde',
+          dateTime: new Date(`${appointment.date}T${appointment.time}:00`),
+        }));
+
+      const examCare = exams
+        .filter(exam => exam.status === ExamStatus.SCHEDULED || exam.status === ExamStatus.AVAILABLE)
+        .map(exam => ({
+          id: `exam-${exam.id}`,
+          kind: 'Exame' as const,
+          title: exam.status === ExamStatus.AVAILABLE ? `${exam.type} com resultado disponível` : exam.type,
+          detail: unitById.get(exam.unitId) || 'Rede municipal de saúde',
+          dateTime: new Date(`${exam.date}T${exam.time}:00`),
+        }));
+
+      setUpcomingCare(
+        [...appointmentCare, ...examCare]
+          .filter(item => item.dateTime >= now || item.title.includes('resultado disponível'))
+          .sort((a, b) => a.dateTime.getTime() - b.dateTime.getTime())
+          .slice(0, 5),
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -785,7 +861,8 @@ export const PatientRemindersPage: React.FC<PatientPageProps> = ({ user }) => {
       }
     };
     load();
-  }, [storageKey]);
+    refreshReminders();
+  }, [storageKey, user.id]);
 
   const save = async () => {
     setSaving(true);
@@ -797,11 +874,17 @@ export const PatientRemindersPage: React.FC<PatientPageProps> = ({ user }) => {
     } finally {
       setSaving(false);
       setFeedback('Preferências salvas.');
+      await refreshReminders();
     }
   };
 
   const toggleChannel = (key: keyof ReminderPreference['channels']) => {
     setPreferences(prev => ({ ...prev, channels: { ...prev.channels, [key]: !prev.channels[key] } }));
+  };
+
+  const markReminderAsRead = async (id: string) => {
+    await api.notifications.markAsRead(id);
+    setNotifications(prev => prev.filter(notification => notification.id !== id));
   };
 
   return (
@@ -838,18 +921,77 @@ export const PatientRemindersPage: React.FC<PatientPageProps> = ({ user }) => {
           Salvar preferências
         </button>
       </div>
-      <div className="grid gap-4">
-        {['Consulta de clínica geral em 24 horas', 'Exame de sangue em 2 dias', 'Resultado disponível'].map((message, index) => (
-          <div key={message} className={`${cardClass} flex items-center gap-4 p-4`}>
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#EAF6FF] text-[#0B60C9]">
-              <BellRing className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="font-black text-[#10223F]">{message}</p>
-              <p className="text-sm font-semibold text-[#5F708A]">{index === 0 ? 'Próximo lembrete' : 'Histórico de lembretes'}</p>
-            </div>
+
+      <div className={`${cardClass} p-5`}>
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#0B60C9]">Lembretes ativos</p>
+            <h2 className="mt-1 text-xl font-black text-[#10223F]">Avisos do seu cuidado</h2>
           </div>
-        ))}
+          <button type="button" onClick={refreshReminders} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#CFE7FF] px-4 text-sm font-black text-[#0B60C9] hover:bg-[#F7FBFF]">
+            <RotateCcw className="h-4 w-4" />
+            Atualizar
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="flex min-h-32 items-center justify-center text-[#5F708A]">
+            <Loader2 className="mr-3 h-5 w-5 animate-spin text-[#0B60C9]" />
+            <span className="font-bold">Atualizando lembretes...</span>
+          </div>
+        ) : notifications.length === 0 ? (
+          <div className="flex min-h-32 flex-col items-center justify-center rounded-2xl border border-dashed border-[#CFE7FF] p-5 text-center">
+            <BellRing className="mb-3 h-7 w-7 text-[#0B60C9]" />
+            <strong className="text-[#10223F]">Nenhum lembrete ativo</strong>
+            <p className="mt-1 text-sm font-semibold text-[#5F708A]">Quando uma consulta ou exame estiver perto, o aviso aparecerá aqui.</p>
+          </div>
+        ) : (
+          <div className="grid gap-3">
+            {notifications.map(notification => (
+              <div key={notification.id} className="flex flex-col gap-3 rounded-2xl border border-[#D9E6F5] bg-[#F7FBFF] p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-[#0B60C9]">
+                    <BellRing className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="font-black text-[#10223F]">{notification.message}</p>
+                    <p className="mt-1 text-sm font-semibold text-[#5F708A]">{new Date(notification.createdAt).toLocaleString('pt-BR')}</p>
+                  </div>
+                </div>
+                <button type="button" onClick={() => markReminderAsRead(notification.id)} className="h-10 rounded-xl border border-[#CFE7FF] px-4 text-sm font-black text-[#0B60C9] hover:bg-white">
+                  Marcar como lido
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className={`${cardClass} p-5`}>
+        <p className="text-xs font-black uppercase tracking-[0.16em] text-[#0B60C9]">Próximos cuidados</p>
+        <h2 className="mt-1 text-xl font-black text-[#10223F]">Consultas e exames acompanhados</h2>
+        <div className="mt-4 grid gap-3">
+          {upcomingCare.length === 0 ? (
+            <div className="flex min-h-32 flex-col items-center justify-center rounded-2xl border border-dashed border-[#CFE7FF] p-5 text-center">
+              <Calendar className="mb-3 h-7 w-7 text-[#0B60C9]" />
+              <strong className="text-[#10223F]">Nada previsto por enquanto</strong>
+              <p className="mt-1 text-sm font-semibold text-[#5F708A]">Novos agendamentos aparecerão aqui automaticamente.</p>
+            </div>
+          ) : upcomingCare.map(item => (
+            <div key={item.id} className="flex items-center gap-4 rounded-2xl border border-[#D9E6F5] p-4">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#EAF6FF] text-[#0B60C9]">
+                {item.kind === 'Consulta' ? <Calendar className="h-5 w-5" /> : <FlaskConical className="h-5 w-5" />}
+              </div>
+              <div>
+                <span className="text-xs font-black uppercase tracking-[0.14em] text-[#8A99AD]">{item.kind}</span>
+                <p className="font-black text-[#10223F]">{item.title}</p>
+                <p className="text-sm font-semibold text-[#5F708A]">
+                  {item.detail} • {item.dateTime.toLocaleDateString('pt-BR')} às {item.dateTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </PatientPageShell>
   );

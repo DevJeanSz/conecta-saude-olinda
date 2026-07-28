@@ -106,7 +106,7 @@ app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false
 }));
-app.use(express.json({ limit: '2mb' }));
+app.use(express.json({ limit: '5mb' }));
 
 // Global rate limiting
 const apiLimiter = rateLimit({
@@ -127,6 +127,41 @@ app.use('/api/auth/', authLimiter);
 const sanitizeText = value => String(xss(value ?? '')).trim().replace(/\s+/g, ' ');
 const SYSTEM_ROLES = ['ADMIN', 'GENERAL_SUPERVISOR', 'DOCTOR', 'ATTENDANT', 'SOCIAL_WORKER', 'PATIENT'];
 const MANAGEMENT_ROLES = ['ADMIN', 'GENERAL_SUPERVISOR'];
+const HEALTH_POST_ICONS = ['shield', 'heart', 'bell', 'newspaper', 'calendar', 'stethoscope', 'syringe', 'megaphone'];
+const DEFAULT_HEALTH_POSTS = [
+  {
+    title: 'Diagnóstico do HIV abre caminho para tratamento e vida digna',
+    context: 'Testagem e cuidado',
+    body: 'Testar cedo ajuda a iniciar acompanhamento e tratamento, proteger a saúde e reduzir riscos para o paciente.',
+    icon: 'shield',
+    image_url: '/news/noticia-hiv-testagem.png',
+    display_order: 1,
+  },
+  {
+    title: 'Tabagismo tem tratamento e apoio na rede de saúde',
+    context: 'Parar de fumar',
+    body: 'Com orientação profissional, plano de cuidado e acompanhamento, largar o cigarro se torna uma decisão possível.',
+    icon: 'heart',
+    image_url: '/news/noticia-tabagismo-tratamento.png',
+    display_order: 2,
+  },
+  {
+    title: 'Queimaduras e saúde cardiovascular',
+    context: 'Julho Vermelho e Amarelo',
+    body: 'Julho reforça prevenção de queimaduras, cuidados em casa e atenção à pressão, ao coração e aos hábitos de vida.',
+    icon: 'bell',
+    image_url: '/news/noticia-campanha-mensal.png',
+    display_order: 3,
+  },
+  {
+    title: 'Prevenção também é cuidado diário',
+    context: 'Saúde em geral',
+    body: 'Vacinação, consultas, exames e orientação de rotina mantêm a família acompanhada antes que o problema cresça.',
+    icon: 'newspaper',
+    image_url: '/news/noticia-saude-geral.png',
+    display_order: 4,
+  },
+];
 const normalizeRole = role => SYSTEM_ROLES.includes(role) ? role : null;
 const requireText = (value, field, max = 255) => {
   const text = sanitizeText(value);
@@ -219,8 +254,62 @@ const mapNotification = row => ({
   userId: row.user_id,
   message: row.message,
   read: row.read,
-  createdAt: row.created_at
+  createdAt: row.created_at,
+  type: row.type ?? 'GENERAL',
+  reference_id: row.reference_id ?? undefined
 });
+
+const mapHealthPost = row => ({
+  id: row.id,
+  title: row.title,
+  context: row.context,
+  text: row.body,
+  icon: row.icon,
+  imageUrl: row.image_url,
+  published: row.published,
+  displayOrder: row.display_order,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at
+});
+
+const requireImageUrl = (value) => {
+  const imageUrl = String(value ?? '').trim();
+  const isBundledAsset = imageUrl.startsWith('/news/');
+  const isUploadedImage = /^data:image\/(png|jpe?g|webp);base64,[a-z0-9+/=]+$/i.test(imageUrl);
+
+  if (!imageUrl || imageUrl.length > 2500000 || (!isBundledAsset && !isUploadedImage)) {
+    const error = new Error('imagem invalida.');
+    error.status = 400;
+    throw error;
+  }
+
+  return imageUrl;
+};
+
+const normalizeHealthPostPayload = (body, current = {}) => {
+  const title = requireText(body.title ?? current.title, 'titulo', 96);
+  const context = requireText(body.context ?? current.context, 'contexto', 48);
+  const text = requireText(body.text ?? current.body, 'texto', 400);
+  const icon = sanitizeText(body.icon ?? current.icon ?? 'newspaper');
+  if (!HEALTH_POST_ICONS.includes(icon)) {
+    const error = new Error('icone invalido.');
+    error.status = 400;
+    throw error;
+  }
+
+  const rawOrder = body.displayOrder ?? body.display_order ?? current.display_order ?? 0;
+  const displayOrder = Math.min(Math.max(Number.parseInt(String(rawOrder), 10) || 0, 0), 999);
+
+  return {
+    title,
+    context,
+    body: text,
+    icon,
+    imageUrl: requireImageUrl(body.imageUrl ?? body.image_url ?? current.image_url),
+    published: body.published !== undefined ? Boolean(body.published) : (current.published ?? true),
+    displayOrder,
+  };
+};
 const mapAppointment = row => ({
   id: row.id,
   patientId: row.patient_id,
@@ -314,6 +403,180 @@ const audit = async (req, action, entityType, entityId, details = {}) => {
     'INSERT INTO audit_logs (user_id, action, entity_type, entity_id, details) VALUES ($1, $2, $3, $4, $5)',
     [req.user.id, action, entityType, entityId, JSON.stringify(details)]
   );
+};
+
+const hasEnabledReminderChannel = channels => Boolean(channels?.sms || channels?.email || channels?.whatsapp);
+
+const isQuietHour = (date = new Date()) => {
+  const hour = date.getHours();
+  return hour >= 22 || hour < 7;
+};
+
+const toDateOnly = (date) => {
+  if (date instanceof Date && !Number.isNaN(date.getTime())) {
+    return date.toISOString().slice(0, 10);
+  }
+
+  const rawDate = String(date || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(rawDate)) return rawDate.slice(0, 10);
+
+  const parsedDate = new Date(rawDate);
+  if (!Number.isNaN(parsedDate.getTime())) return parsedDate.toISOString().slice(0, 10);
+
+  return rawDate.split('T')[0];
+};
+
+const toTimeOnly = time => String(time || '00:00').slice(0, 5);
+
+const toEventDate = (date, time) => new Date(`${toDateOnly(date)}T${toTimeOnly(time)}:00`);
+
+const formatReminderDistance = (eventDate, now = new Date()) => {
+  const diffMs = eventDate.getTime() - now.getTime();
+  const diffMinutes = Math.max(0, Math.round(diffMs / 60000));
+  if (diffMinutes < 60) return `${diffMinutes} minuto(s)`;
+
+  const diffHours = Math.round(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours} hora(s)`;
+
+  return `${Math.round(diffHours / 24)} dia(s)`;
+};
+
+const createNotification = async ({ userId, message, type = 'GENERAL', referenceId = null, emit = true }) => {
+  const cleanMessage = sanitizeText(String(message)).slice(0, 500);
+  const cleanType = sanitizeText(String(type)).slice(0, 80);
+  const cleanReferenceId = referenceId ? sanitizeText(String(referenceId)).slice(0, 160) : null;
+  const conflictClause = cleanReferenceId
+    ? 'ON CONFLICT (user_id, type, reference_id) WHERE reference_id IS NOT NULL DO NOTHING'
+    : '';
+
+  const { rows } = await pool.query(
+    `INSERT INTO notifications (user_id, message, type, reference_id)
+     VALUES ($1, $2, $3, $4)
+     ${conflictClause}
+     RETURNING *`,
+    [userId, cleanMessage, cleanType, cleanReferenceId]
+  );
+
+  if (!rows[0]) return null;
+
+  const notification = mapNotification(rows[0]);
+  if (emit) io.to(userId).emit('new_notification', notification);
+  return notification;
+};
+
+const getReminderPreferenceForUser = async (userId) => {
+  const { rows } = await pool.query('SELECT * FROM reminder_preferences WHERE user_id = $1', [userId]);
+  if (rows[0]) return mapReminderPreference(rows[0]);
+
+  const created = await pool.query(
+    `INSERT INTO reminder_preferences (user_id)
+     VALUES ($1)
+     ON CONFLICT (user_id) DO UPDATE SET updated_at = reminder_preferences.updated_at
+     RETURNING *`,
+    [userId]
+  );
+  return mapReminderPreference(created.rows[0]);
+};
+
+const enqueuePatientReminders = async (user, { emit = true } = {}) => {
+  if (!user || user.role !== 'PATIENT') return [];
+
+  const preference = await getReminderPreferenceForUser(user.id);
+  if (!hasEnabledReminderChannel(preference.channels)) return [];
+  if (preference.quietHours && isQuietHour()) return [];
+
+  const patientRes = await pool.query(
+    'SELECT id FROM patients WHERE user_id = $1 OR email = $2 ORDER BY created_at DESC LIMIT 1',
+    [user.id, user.email]
+  );
+  const patientId = patientRes.rows[0]?.id;
+  if (!patientId) return [];
+
+  const created = [];
+  const leadTimeHours = Math.min(Math.max(Number(preference.leadTimeHours) || 24, 1), 168);
+  const now = new Date();
+
+  const { rows: appointments } = await pool.query(
+    `SELECT a.*, doctor.name as doctor_name, sp.name as specialty_name, unit.name as unit_name
+     FROM appointments a
+     JOIN users doctor ON a.doctor_id = doctor.id
+     LEFT JOIN specialties sp ON doctor.specialty_id = sp.id
+     JOIN units unit ON a.unit_id = unit.id
+     WHERE a.patient_id = $1
+       AND a.status = 'SCHEDULED'
+       AND (a.date::timestamp + a.time::time) BETWEEN now() AND now() + ($2::int * interval '1 hour')
+     ORDER BY a.date ASC, a.time ASC`,
+    [patientId, leadTimeHours]
+  );
+
+  for (const appointment of appointments) {
+    const eventDate = toEventDate(appointment.date, appointment.time);
+    const eventDateKey = toDateOnly(appointment.date);
+    const eventTimeKey = toTimeOnly(appointment.time);
+    const timeDistance = formatReminderDistance(eventDate, now);
+    const dateLabel = eventDate.toLocaleDateString('pt-BR');
+    const message = `Lembrete de consulta: ${appointment.specialty_name || 'Atendimento'} com ${appointment.doctor_name} na ${appointment.unit_name} em ${timeDistance}, no dia ${dateLabel} às ${eventTimeKey}.`;
+    const notification = await createNotification({
+      userId: user.id,
+      message,
+      type: 'APPOINTMENT_REMINDER',
+      referenceId: `appointment:${appointment.id}:${eventDateKey}:${eventTimeKey}`,
+      emit,
+    });
+    if (notification) created.push(notification);
+  }
+
+  const { rows: exams } = await pool.query(
+    `SELECT e.*, unit.name as unit_name
+     FROM exams e
+     JOIN units unit ON e.unit_id = unit.id
+     WHERE e.patient_id = $1
+       AND e.status = 'SCHEDULED'
+       AND (e.date::timestamp + e.time::time) BETWEEN now() AND now() + ($2::int * interval '1 hour')
+     ORDER BY e.date ASC, e.time ASC`,
+    [patientId, leadTimeHours]
+  );
+
+  for (const exam of exams) {
+    const eventDate = toEventDate(exam.date, exam.time);
+    const eventDateKey = toDateOnly(exam.date);
+    const eventTimeKey = toTimeOnly(exam.time);
+    const timeDistance = formatReminderDistance(eventDate, now);
+    const dateLabel = eventDate.toLocaleDateString('pt-BR');
+    const message = `Lembrete de exame: ${exam.type} na ${exam.unit_name} em ${timeDistance}, no dia ${dateLabel} às ${eventTimeKey}. ${exam.preparation ? `Preparo: ${exam.preparation}` : 'Leve documento com foto e Cartão SUS.'}`;
+    const notification = await createNotification({
+      userId: user.id,
+      message,
+      type: 'EXAM_REMINDER',
+      referenceId: `exam:${exam.id}:${eventDateKey}:${eventTimeKey}`,
+      emit,
+    });
+    if (notification) created.push(notification);
+  }
+
+  const { rows: availableResults } = await pool.query(
+    `SELECT e.*
+     FROM exams e
+     WHERE e.patient_id = $1
+       AND e.status = 'AVAILABLE'
+       AND e.result_available = true
+       AND e.date >= current_date - interval '90 days'
+     ORDER BY e.date DESC, e.time DESC`,
+    [patientId]
+  );
+
+  for (const exam of availableResults) {
+    const notification = await createNotification({
+      userId: user.id,
+      message: `Resultado disponível: ${exam.type}. Acesse Meus exames para consultar e baixar o resultado.`,
+      type: 'EXAM_RESULT',
+      referenceId: `exam-result:${exam.id}`,
+      emit,
+    });
+    if (notification) created.push(notification);
+  }
+
+  return created;
 };
 
 const ensureSchemaAndSeed = async () => {
@@ -422,8 +685,25 @@ const ensureSchemaAndSeed = async () => {
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       message text NOT NULL,
+      type text NOT NULL DEFAULT 'GENERAL',
+      reference_id text,
       read boolean NOT NULL DEFAULT false,
       created_at timestamptz NOT NULL DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS health_posts (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      title text NOT NULL CHECK (char_length(title) <= 96),
+      context text NOT NULL CHECK (char_length(context) <= 48),
+      body text NOT NULL CHECK (char_length(body) <= 400),
+      icon text NOT NULL DEFAULT 'newspaper',
+      image_url text NOT NULL,
+      published boolean NOT NULL DEFAULT true,
+      display_order integer NOT NULL DEFAULT 0,
+      created_by uuid REFERENCES users(id) ON DELETE SET NULL,
+      updated_by uuid REFERENCES users(id) ON DELETE SET NULL,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
     );
 
     CREATE TABLE IF NOT EXISTS audit_logs (
@@ -448,6 +728,8 @@ const ensureSchemaAndSeed = async () => {
     CREATE INDEX IF NOT EXISTS idx_exams_patient ON exams(patient_id, date);
     CREATE INDEX IF NOT EXISTS idx_care_events_patient ON care_events(patient_id, date);
     CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, read);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_reference ON notifications(user_id, type, reference_id) WHERE reference_id IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_health_posts_public ON health_posts(published, display_order, updated_at DESC);
 
     CREATE TABLE IF NOT EXISTS exam_types (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -551,6 +833,9 @@ const ensureSchemaAndSeed = async () => {
     'ALTER TABLE exams ADD COLUMN IF NOT EXISTS cancel_reason text;',
     'ALTER TABLE exams DROP CONSTRAINT IF EXISTS exams_status_check;',
     'ALTER TABLE exams ADD CONSTRAINT exams_status_check CHECK (status IN (\'SCHEDULED\', \'AVAILABLE\', \'CANCELLED\', \'NO_SHOW\'));',
+    'ALTER TABLE notifications ADD COLUMN IF NOT EXISTS type text DEFAULT \'GENERAL\';',
+    'ALTER TABLE notifications ADD COLUMN IF NOT EXISTS reference_id text;',
+    'CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_reference ON notifications(user_id, type, reference_id) WHERE reference_id IS NOT NULL;',
     'ALTER TABLE units ADD COLUMN IF NOT EXISTS cnes_code text UNIQUE;',
     'ALTER TABLE units ADD COLUMN IF NOT EXISTS razao_social text;',
     'ALTER TABLE units ADD COLUMN IF NOT EXISTS tipo_unidade text;',
@@ -586,6 +871,21 @@ const ensureSchemaAndSeed = async () => {
       await pool.query(query);
     } catch (e) {
     }
+  }
+
+  try {
+    const { rows: postRows } = await pool.query('SELECT COUNT(*)::int AS total FROM health_posts');
+    if (postRows[0].total === 0) {
+      for (const post of DEFAULT_HEALTH_POSTS) {
+        await pool.query(
+          `INSERT INTO health_posts (title, context, body, icon, image_url, published, display_order)
+           VALUES ($1, $2, $3, $4, $5, true, $6)`,
+          [post.title, post.context, post.body, post.icon, post.image_url, post.display_order]
+        );
+      }
+    }
+  } catch (err) {
+    console.error('[HealthPosts] Falha ao criar publicacoes iniciais:', err.message);
   }
 
   if (process.env.INITIAL_ADMIN_PASSWORD) {
@@ -1067,6 +1367,80 @@ app.delete('/api/exam-types/:id', authenticate, authorize('ADMIN', 'GENERAL_SUPE
   }
 });
 
+app.get('/api/health-posts', async (_req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM health_posts
+       WHERE published = true
+       ORDER BY display_order ASC, updated_at DESC
+       LIMIT 12`
+    );
+    return res.json(rows.map(mapHealthPost));
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.get('/api/admin/health-posts', authenticate, authorize('ADMIN', 'GENERAL_SUPERVISOR'), async (_req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM health_posts
+       ORDER BY display_order ASC, updated_at DESC`
+    );
+    return res.json(rows.map(mapHealthPost));
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.post('/api/admin/health-posts', authenticate, authorize('ADMIN', 'GENERAL_SUPERVISOR'), async (req, res, next) => {
+  try {
+    const payload = normalizeHealthPostPayload(req.body);
+    const { rows } = await pool.query(
+      `INSERT INTO health_posts (title, context, body, icon, image_url, published, display_order, created_by, updated_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
+       RETURNING *`,
+      [payload.title, payload.context, payload.body, payload.icon, payload.imageUrl, payload.published, payload.displayOrder, req.user.id]
+    );
+    await audit(req, 'CREATE', 'health_post', rows[0].id);
+    return res.status(201).json(mapHealthPost(rows[0]));
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.patch('/api/admin/health-posts/:id', authenticate, authorize('ADMIN', 'GENERAL_SUPERVISOR'), async (req, res, next) => {
+  try {
+    const current = await pool.query('SELECT * FROM health_posts WHERE id = $1', [req.params.id]);
+    if (!current.rows[0]) return res.status(404).json({ error: 'Publicacao nao encontrada.' });
+
+    const payload = normalizeHealthPostPayload(req.body, current.rows[0]);
+    const { rows } = await pool.query(
+      `UPDATE health_posts
+       SET title = $1, context = $2, body = $3, icon = $4, image_url = $5, published = $6,
+           display_order = $7, updated_by = $8, updated_at = now()
+       WHERE id = $9
+       RETURNING *`,
+      [payload.title, payload.context, payload.body, payload.icon, payload.imageUrl, payload.published, payload.displayOrder, req.user.id, req.params.id]
+    );
+    await audit(req, 'UPDATE', 'health_post', req.params.id);
+    return res.json(mapHealthPost(rows[0]));
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.delete('/api/admin/health-posts/:id', authenticate, authorize('ADMIN', 'GENERAL_SUPERVISOR'), async (req, res, next) => {
+  try {
+    const { rowCount } = await pool.query('DELETE FROM health_posts WHERE id = $1', [req.params.id]);
+    if (!rowCount) return res.status(404).json({ error: 'Publicacao nao encontrada.' });
+    await audit(req, 'DELETE', 'health_post', req.params.id);
+    return res.status(204).end();
+  } catch (error) {
+    return next(error);
+  }
+});
+
 app.get('/api/users', authenticate, async (req, res, next) => {
   try {
     const unitId = req.query.unitId ? String(req.query.unitId) : null;
@@ -1537,6 +1911,16 @@ app.post('/api/appointments', authenticate, async (req, res, next) => {
       [patientId, doctorId, unitId, date, time, req.body.notes ? sanitizeText(req.body.notes).slice(0, 500) : null]
     );
     await audit(req, 'CREATE', 'appointment', rows[0].id);
+    if (patient.rows[0].user_id) {
+      const eventDate = toEventDate(rows[0].date, rows[0].time);
+      const eventTime = toTimeOnly(rows[0].time);
+      await createNotification({
+        userId: patient.rows[0].user_id,
+        message: `Consulta agendada: ${eventDate.toLocaleDateString('pt-BR')} às ${eventTime}. Você receberá um lembrete quando a data estiver próxima.`,
+        type: 'APPOINTMENT_CREATED',
+        referenceId: `appointment-created:${rows[0].id}`,
+      });
+    }
     res.status(201).json(mapAppointment(rows[0]));
   } catch (error) {
     next(error);
@@ -1730,6 +2114,16 @@ app.post('/api/exams', authenticate, async (req, res, next) => {
       ]
     );
     await audit(req, 'CREATE', 'exam', rows[0].id);
+    if (patient.rows[0].user_id) {
+      const eventDate = toEventDate(rows[0].date, rows[0].time);
+      const eventTime = toTimeOnly(rows[0].time);
+      await createNotification({
+        userId: patient.rows[0].user_id,
+        message: `Exame agendado: ${type} em ${eventDate.toLocaleDateString('pt-BR')} às ${eventTime}. Confira o preparo em Meus exames.`,
+        type: 'EXAM_CREATED',
+        referenceId: `exam-created:${rows[0].id}`,
+      });
+    }
     res.status(201).json(mapExam(rows[0]));
   } catch (error) {
     next(error);
@@ -1771,6 +2165,17 @@ app.patch('/api/exams/:id', authenticate, authorize('ADMIN', 'GENERAL_SUPERVISOR
     );
 
     await audit(req, 'UPDATE', 'exam', req.params.id, { status: nextStatus });
+    if (nextStatus === 'AVAILABLE' && rows[0].result_available) {
+      const patient = await pool.query('SELECT user_id FROM patients WHERE id = $1', [rows[0].patient_id]);
+      if (patient.rows[0]?.user_id) {
+        await createNotification({
+          userId: patient.rows[0].user_id,
+          message: `Resultado disponível: ${rows[0].type}. Acesse Meus exames para consultar e baixar o resultado.`,
+          type: 'EXAM_RESULT',
+          referenceId: `exam-result:${rows[0].id}`,
+        });
+      }
+    }
     return res.json(mapExam(rows[0]));
   } catch (error) {
     return next(error);
@@ -1860,12 +2265,16 @@ app.put('/api/reminders/preferences', authenticate, async (req, res, next) => {
 
 app.post('/api/notifications', authenticate, async (req, res, next) => {
   try {
-    const { rows } = await pool.query(
-      'INSERT INTO notifications (user_id, message) VALUES ($1, $2) RETURNING *',
-      [req.body.userId, requireText(req.body.message, 'mensagem', 500)]
-    );
-    const newNotif = mapNotification(rows[0]);
-    io.to(req.body.userId).emit('new_notification', newNotif);
+    const targetUserId = requireText(req.body.userId, 'usuario', 80);
+    const newNotif = await createNotification({
+      userId: targetUserId,
+      message: requireText(req.body.message, 'mensagem', 500),
+      type: req.body.type || 'GENERAL',
+      referenceId: req.body.referenceId || req.body.reference_id || null,
+    });
+    if (!newNotif) {
+      return res.status(200).json({ duplicated: true });
+    }
     res.status(201).json(newNotif);
   } catch (error) {
     next(error);
@@ -1874,7 +2283,7 @@ app.post('/api/notifications', authenticate, async (req, res, next) => {
 
 app.patch('/api/notifications/:id', authenticate, async (req, res, next) => {
   try {
-    const { rows } = await pool.query('UPDATE notifications SET read = $1 WHERE id = $2 RETURNING *', [Boolean(req.body.read), req.params.id]);
+    const { rows } = await pool.query('UPDATE notifications SET read = $1 WHERE id = $2 AND user_id = $3 RETURNING *', [Boolean(req.body.read), req.params.id, req.user.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Notificacao nao encontrada.' });
     return res.json(mapNotification(rows[0]));
   } catch (error) {
@@ -2067,6 +2476,23 @@ cron.schedule('*/5 * * * *', async () => {
     }
   } catch (err) {
     console.error('[Auto-Cancel] Falha ao executar rotina de cancelamento:', err);
+  }
+});
+
+cron.schedule('*/15 * * * *', async () => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT u.*,
+        (SELECT string_agg(unit_id::text, ',') FROM user_units WHERE user_id = u.id) as unit_ids
+      FROM users u
+      WHERE u.role = 'PATIENT' AND u.active = true
+    `);
+
+    for (const row of rows) {
+      await enqueuePatientReminders(mapUser(row), { emit: true });
+    }
+  } catch (error) {
+    console.error('[Reminders] Erro ao gerar lembretes:', error.message);
   }
 });
 
@@ -2378,61 +2804,13 @@ cron.schedule('30 2 * * *', syncCnesProfessionals);
 
 app.get('/api/notifications', authenticate, async (req, res, next) => {
   try {
-    const userId = req.user.id;
-    
-    const userRes = await pool.query('SELECT role, email FROM users WHERE id = $1', [userId]);
-    const userRole = userRes.rows[0]?.role;
-    
-    let notifications = [];
-    
-    const staticNotifsRes = await pool.query('SELECT * FROM notifications WHERE user_id = $1 AND read = false ORDER BY created_at DESC', [userId]);
-    notifications.push(...staticNotifsRes.rows.map(mapNotification));
-    
-    if (userRole === 'PATIENT') {
-       const patientRes = await pool.query('SELECT id FROM patients WHERE user_id = $1 OR email = $2', [userId, userRes.rows[0].email]);
-       if (patientRes.rows.length > 0) {
-          const patientId = patientRes.rows[0].id;
-          const apptsRes = await pool.query(`
-             SELECT a.*, u.name as doctor_name, sp.name as specialty_name, hu.name as unit_name
-             FROM appointments a
-             JOIN users u ON a.doctor_id = u.id
-             LEFT JOIN specialties sp ON u.specialty_id = sp.id
-             JOIN units hu ON a.unit_id = hu.id
-             WHERE a.patient_id = $1 AND a.status = 'SCHEDULED'
-          `, [patientId]);
-          
-          for (const appt of apptsRes.rows) {
-             const apptDate = new Date(`${appt.date}T${appt.time}:00`);
-             const now = new Date();
-             
-             if (apptDate > now) {
-                const dismissedCheck = await pool.query('SELECT id FROM notifications WHERE user_id = $1 AND message = $2', [userId, `dismissed_appt_${appt.id}`]);
-                if (dismissedCheck.rows.length === 0) {
-                   const diffMs = apptDate.getTime() - now.getTime();
-                   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-                   const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                   
-                   let timeStr = '';
-                   if (diffDays > 0) timeStr = `${diffDays} dia(s)`;
-                   else timeStr = `${diffHours} hora(s)`;
-                   
-                   notifications.push({
-                      id: `dynamic_${appt.id}`,
-                      userId,
-                      message: `Lembrete: Sua consulta de ${appt.specialty_name || 'Clínica Médica'} com ${appt.doctor_name} na ${appt.unit_name} será em ${timeStr} (Data: ${appt.date} às ${appt.time}).`,
-                      read: false,
-                      createdAt: new Date().toISOString(),
-                      type: 'APPOINTMENT_REMINDER',
-                      reference_id: appt.id
-                   });
-                }
-             }
-          }
-       }
-    }
-    
-    notifications.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    res.json(notifications);
+    await enqueuePatientReminders(req.user, { emit: false });
+
+    const { rows } = await pool.query(
+      'SELECT * FROM notifications WHERE user_id = $1 AND read = false ORDER BY created_at DESC',
+      [req.user.id]
+    );
+    res.json(rows.map(mapNotification));
   } catch (err) {
     next(err);
   }
@@ -2443,12 +2821,7 @@ app.post('/api/notifications/:id/read', authenticate, async (req, res, next) => 
      const notifId = req.params.id;
      const userId = req.user.id;
      
-     if (notifId.startsWith('dynamic_')) {
-        const apptId = notifId.replace('dynamic_', '');
-        await pool.query('INSERT INTO notifications (user_id, message, read) VALUES ($1, $2, true)', [userId, `dismissed_appt_${apptId}`]);
-     } else {
-        await pool.query('UPDATE notifications SET read = true WHERE id = $1 AND user_id = $2', [notifId, userId]);
-     }
+     await pool.query('UPDATE notifications SET read = true WHERE id = $1 AND user_id = $2', [notifId, userId]);
      res.json({ success: true });
   } catch(err) {
      next(err);
