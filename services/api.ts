@@ -244,7 +244,8 @@ export const api = {
       .catch(() => []),
     getByUnit: (unitId: string) => request<Exam[]>('/exams', {}, { unitId }).catch(() => []),
     add: (exam: Omit<Exam, 'id' | 'status' | 'resultAvailable'>) => request<Exam>('/exams', { method: 'POST', body: JSON.stringify(exam) }),
-    update: (id: string, updates: Partial<Exam>) => request<Exam>(`/exams/${pathId(id)}`, { method: 'PATCH', body: JSON.stringify(updates) })
+    update: (id: string, updates: Partial<Exam>) => request<Exam>(`/exams/${pathId(id)}`, { method: 'PATCH', body: JSON.stringify(updates) }),
+    cancel: (id: string, reason: string) => request<Exam>(`/exams/${pathId(id)}/cancel`, { method: 'PATCH', body: JSON.stringify({ reason }) })
   },
   careHistory: {
     getByPatientId: (patientId: string) => request<CareHistoryItem[]>('/care-history', {}, { patientId })

@@ -638,7 +638,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
         if (type === 'appointment') {
           updated = await api.appointments.cancel(id, reason.trim());
         } else {
-          updated = await api.exams.update(id, { status: ExamStatus.CANCELLED }); 
+          updated = await api.exams.cancel(id, reason.trim()); 
         }
         await loadData();
         if (showDetailModal && showDetailModal.data.id === id) {
@@ -1193,6 +1193,23 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
                   </button>
                 ))}
               </div>
+
+              {showDetailModal.type === 'exam' && showDetailModal.data.referralAttachment && (
+                <div className="mt-4 p-3 bg-[#F7FBFF] border border-[#CFE7FF] rounded-lg">
+                  <span className="block text-sm font-bold text-[#06296F] mb-2">Encaminhamento anexado</span>
+                  <button 
+                    onClick={() => {
+                      const img = new Image();
+                      img.src = showDetailModal.data.referralAttachment;
+                      const w = window.open("");
+                      w?.document.write(img.outerHTML);
+                    }}
+                    className="text-sm bg-white border border-[#0B60C9] text-[#0B60C9] px-3 py-1.5 rounded font-medium hover:bg-[#F0F7FF] transition-colors"
+                  >
+                    Visualizar Anexo
+                  </button>
+                </div>
+              )}
 
               <label>
                 Notas clínicas

@@ -106,7 +106,7 @@ app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false
 }));
-app.use(express.json({ limit: '256kb' }));
+app.use(express.json({ limit: '2mb' }));
 
 // Global rate limiting
 const apiLimiter = rateLimit({
@@ -246,7 +246,9 @@ const mapExam = row => ({
   time: row.time,
   status: row.status,
   preparation: row.preparation ?? undefined,
-  resultAvailable: row.result_available ?? false
+  resultAvailable: row.result_available ?? false,
+  referralAttachment: row.referral_attachment ?? undefined,
+  cancelReason: row.cancel_reason ?? undefined
 });
 
 const mapCareEvent = row => ({
@@ -984,7 +986,8 @@ const mapExamType = row => ({
   maxDailyAppointments: row.max_daily_appointments ?? undefined,
   isGlobal: row.is_global ?? true,
   unitIds: row.unit_ids ? (typeof row.unit_ids === 'string' ? JSON.parse(row.unit_ids) : row.unit_ids) : [],
-  preparation: row.preparation ?? undefined
+  preparation: row.preparation ?? undefined,
+  requiresReferral: row.requires_referral ?? true
 });
 
 app.get('/api/exam-types', async (_req, res, next) => {
@@ -1004,10 +1007,11 @@ app.post('/api/exam-types', authenticate, authorize('ADMIN', 'GENERAL_SUPERVISOR
     const isGlobal = req.body.isGlobal ?? true;
     const unitIds = req.body.unitIds ? JSON.stringify(req.body.unitIds) : '[]';
     const preparation = req.body.preparation || null;
+    const requiresReferral = req.body.requiresReferral ?? true;
     
     const { rows } = await pool.query(
-      'INSERT INTO exam_types (name, schedule, max_daily_appointments, is_global, unit_ids, preparation) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-      [name, schedule, maxDailyAppointments, isGlobal, unitIds, preparation]
+      'INSERT INTO exam_types (name, schedule, max_daily_appointments, is_global, unit_ids, preparation, requires_referral) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+      [name, schedule, maxDailyAppointments, isGlobal, unitIds, preparation, requiresReferral]
     );
     await audit(req, 'CREATE', 'exam_type', rows[0].id);
     return res.status(201).json(mapExamType(rows[0]));
@@ -1024,10 +1028,11 @@ app.patch('/api/exam-types/:id', authenticate, authorize('ADMIN', 'GENERAL_SUPER
     const isGlobal = req.body.isGlobal ?? true;
     const unitIds = req.body.unitIds ? JSON.stringify(req.body.unitIds) : '[]';
     const preparation = req.body.preparation || null;
+    const requiresReferral = req.body.requiresReferral ?? true;
     
     const { rows } = await pool.query(
-      'UPDATE exam_types SET name = $1, schedule = $2, max_daily_appointments = $3, is_global = $4, unit_ids = $5, preparation = $6 WHERE id = $7 RETURNING *',
-      [name, schedule, maxDailyAppointments, isGlobal, unitIds, preparation, req.params.id]
+      'UPDATE exam_types SET name = $1, schedule = $2, max_daily_appointments = $3, is_global = $4, unit_ids = $5, preparation = $6, requires_referral = $7 WHERE id = $8 RETURNING *',
+      [name, schedule, maxDailyAppointments, isGlobal, unitIds, preparation, requiresReferral, req.params.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Tipo de exame nao encontrado.' });
     await audit(req, 'UPDATE', 'exam_type', req.params.id);
@@ -1689,8 +1694,8 @@ app.post('/api/exams', authenticate, async (req, res, next) => {
     if (!patient.rows[0]) return res.status(400).json({ error: 'Paciente invalido.' });
 
     const { rows } = await pool.query(
-      `INSERT INTO exams (patient_id, unit_id, type, request_code, date, time, preparation)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO exams (patient_id, unit_id, type, request_code, date, time, preparation, referral_attachment)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
       [
         patientId,
@@ -1699,13 +1704,26 @@ app.post('/api/exams', authenticate, async (req, res, next) => {
         req.body.requestCode ? sanitizeText(req.body.requestCode).slice(0, 80) : null,
         date,
         time,
-        req.body.preparation ? sanitizeText(req.body.preparation).slice(0, 500) : null
+        req.body.preparation ? sanitizeText(req.body.preparation).slice(0, 500) : null,
+        req.body.referralAttachment || null
       ]
     );
     await audit(req, 'CREATE', 'exam', rows[0].id);
     res.status(201).json(mapExam(rows[0]));
   } catch (error) {
     next(error);
+  }
+});
+
+app.patch('/api/exams/:id/cancel', authenticate, async (req, res, next) => {
+  try {
+    const reason = requireText(req.body.reason, 'motivo do cancelamento');
+    const { rows } = await pool.query('UPDATE exams SET status = $1, cancel_reason = $2 WHERE id = $3 RETURNING *', [ExamStatus.CANCELLED, reason, req.params.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Exame não encontrado.' });
+    await audit(req, 'UPDATE', 'exam', req.params.id);
+    return res.json(mapExam(rows[0]));
+  } catch (error) {
+    return next(error);
   }
 });
 
@@ -1943,7 +1961,44 @@ cron.schedule('*/5 * * * *', async () => {
     }
     
     if (cancelledCount > 0) {
-      console.log(`[Auto-Cancel] ${cancelledCount} agendamentos foram cancelados por falta/atraso.`);
+      console.log(`[Auto-Cancel] ${cancelledCount} consultas foram canceladas por falta/atraso.`);
+    }
+
+    // E faz a mesma logica para EXAMES
+    const { rows: exams } = await pool.query(`
+      SELECT e.id, e.date, e.time, u.tolerance_minutes, u.auto_cancel_no_show
+      FROM exams e
+      JOIN units u ON e.unit_id = u.id
+      WHERE e.status = 'SCHEDULED' 
+      AND e.date <= $1
+      AND u.auto_cancel_no_show = true
+    `, [currentDate]);
+
+    let cancelledExamsCount = 0;
+    
+    for (const exam of exams) {
+      if (exam.date < currentDate) {
+        // Dias anteriores
+        await pool.query('UPDATE exams SET status = $1 WHERE id = $2', ['NO_SHOW', exam.id]);
+        cancelledExamsCount++;
+      } else if (exam.date === currentDate) {
+        // Hoje, validar horario + tolerancia
+        const [hour, minute] = exam.time.split(':').map(Number);
+        const tolerance = exam.tolerance_minutes || 15;
+        
+        const examTime = new Date();
+        examTime.setHours(hour, minute, 0, 0);
+        examTime.setMinutes(examTime.getMinutes() + tolerance);
+
+        if (now > examTime) {
+          await pool.query('UPDATE exams SET status = $1 WHERE id = $2', ['NO_SHOW', exam.id]);
+          cancelledExamsCount++;
+        }
+      }
+    }
+
+    if (cancelledExamsCount > 0) {
+      console.log(`[Auto-Cancel] ${cancelledExamsCount} exames foram cancelados por falta/atraso.`);
     }
   } catch (err) {
     console.error('[Auto-Cancel] Falha ao executar rotina de cancelamento:', err);

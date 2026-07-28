@@ -17,7 +17,8 @@ export enum AppointmentStatus {
 export enum ExamStatus {
   SCHEDULED = 'SCHEDULED',
   AVAILABLE = 'AVAILABLE',
-  CANCELLED = 'CANCELLED'
+  CANCELLED = 'CANCELLED',
+  NO_SHOW = 'NO_SHOW'
 }
 
 export type AttendanceType = 'CHEGADA' | 'SENHA';
@@ -128,10 +129,11 @@ export interface Specialty {
 export interface ExamType {
   id: string;
   name: string;
-  schedule?: DoctorSchedule[];
+  schedule: DoctorSchedule[];
   maxDailyAppointments?: number;
-  isGlobal?: boolean;
+  isGlobal: boolean;
   unitIds?: string[];
+  requiresReferral?: boolean;
   preparation?: string;
 }
 
@@ -228,6 +230,8 @@ export interface Exam {
   preparation?: string;
   resultAvailable?: boolean;
   notes?: string;
+  referralAttachment?: string;
+  cancelReason?: string;
 }
 
 export interface CareHistoryItem {

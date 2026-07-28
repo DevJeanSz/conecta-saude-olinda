@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { compressImage } from '../utils';
 import {
   AlertCircle,
   BellRing,
@@ -22,6 +23,7 @@ import {
   ShieldCheck,
   Stethoscope,
   Trash2,
+  X
 } from 'lucide-react';
 import { api } from '../services/api';
 import {
@@ -217,8 +219,12 @@ export const PatientAppointmentsPage: React.FC<PatientPageProps> = ({ user }) =>
     .sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`));
 
   const cancelAppointment = async (appointment: Appointment) => {
-    if (!window.confirm('Cancelar esta consulta?')) return;
-    await api.appointments.update(appointment.id, { status: AppointmentStatus.CANCELLED });
+    const reason = window.prompt('Motivo do cancelamento (obrigatório):');
+    if (!reason || !reason.trim()) {
+        if (reason !== null) alert('O motivo do cancelamento é obrigatório.');
+        return;
+    }
+    await api.appointments.cancel(appointment.id, reason.trim());
     setFeedback('Consulta cancelada!');
     await refresh();
   };
@@ -477,6 +483,7 @@ export const PatientExamSchedulePage: React.FC<PatientPageProps> = ({ user }) =>
     unitId: '',
     date: '',
     time: '08:00',
+    referralAttachment: '',
   });
   const availableExamDates = useMemo(() => getAvailableExamDates(), []);
 
@@ -521,7 +528,18 @@ export const PatientExamSchedulePage: React.FC<PatientPageProps> = ({ user }) =>
     const validUnits = type.isGlobal ? units : units.filter(u => type.unitIds?.includes(u.id));
     const newUnitId = validUnits.some(u => u.id === form.unitId) ? form.unitId : (validUnits[0]?.id || '');
     
-    setForm(prev => ({ ...prev, typeId, unitId: newUnitId }));
+    setForm(prev => ({ ...prev, typeId, unitId: newUnitId, referralAttachment: '' }));
+  };
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const compressed = await compressImage(file);
+      setForm(prev => ({ ...prev, referralAttachment: compressed }));
+    } catch (error) {
+      setFeedback({ type: 'error', message: 'Erro ao processar imagem do encaminhamento.' });
+    }
   };
 
   const submit = async (event: React.FormEvent) => {
@@ -534,6 +552,10 @@ export const PatientExamSchedulePage: React.FC<PatientPageProps> = ({ user }) =>
       setFeedback({ type: 'error', message: 'Selecione um tipo de exame válido.' });
       return;
     }
+    if (selectedExamType.requiresReferral && !form.referralAttachment) {
+      setFeedback({ type: 'error', message: 'É obrigatório anexar o encaminhamento para este exame.' });
+      return;
+    }
     setSubmitting(true);
     try {
       await api.exams.add({
@@ -544,6 +566,7 @@ export const PatientExamSchedulePage: React.FC<PatientPageProps> = ({ user }) =>
         date: form.date,
         time: form.time,
         preparation,
+        referralAttachment: form.referralAttachment || undefined,
       });
       setFeedback({ type: 'success', message: 'Exame agendado com sucesso. O resumo já está disponível em Meus exames.' });
     } catch (error) {
@@ -594,6 +617,26 @@ export const PatientExamSchedulePage: React.FC<PatientPageProps> = ({ user }) =>
               </div>
             </div>
           </div>
+          {selectedExamType?.requiresReferral && (
+            <div className="rounded-xl border border-[#CFE7FF] bg-[#F7FBFF] p-4">
+              <label className="mb-2 block text-sm font-black text-[#06296F]">
+                Anexo do Encaminhamento (Obrigatório)
+              </label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                required
+                className="w-full text-sm text-slate-600 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-[#0B60C9] file:text-white hover:file:bg-[#08499B]"
+              />
+              {form.referralAttachment && (
+                <div className="mt-3">
+                  <p className="text-xs text-green-600 font-bold mb-1">✓ Imagem processada e anexada</p>
+                  <img src={form.referralAttachment} alt="Encaminhamento" className="max-h-32 rounded object-contain border border-slate-200" />
+                </div>
+              )}
+            </div>
+          )}
           <div className="rounded-2xl border border-[#CFE7FF] bg-[#F7FBFF] p-4">
             <p className="text-xs font-black uppercase text-[#8A99AD]">Preparo</p>
             <p className="mt-1 text-sm font-bold text-[#10223F]">{preparation}</p>
@@ -628,6 +671,24 @@ export const PatientExamsPage: React.FC<PatientPageProps> = ({ user }) => {
     };
     run();
   }, [user.id]);
+
+  const refresh = async () => {
+    setLoading(true);
+    const patient = await loadPatient(user);
+    setExams(patient ? await api.exams.getByPatientId(patient.id) : []);
+    setLoading(false);
+  };
+
+  const cancelExam = async (exam: Exam) => {
+    const reason = window.prompt('Motivo do cancelamento (obrigatório):');
+    if (!reason || !reason.trim()) {
+        if (reason !== null) alert('O motivo do cancelamento é obrigatório.');
+        return;
+    }
+    await api.exams.cancel(exam.id, reason.trim());
+    setFeedback('Exame cancelado!');
+    await refresh();
+  };
 
   const visibleExams = exams.filter(exam => tab === 'scheduled' ? exam.status === ExamStatus.SCHEDULED : exam.status === ExamStatus.AVAILABLE);
 
@@ -675,13 +736,25 @@ export const PatientExamsPage: React.FC<PatientPageProps> = ({ user }) => {
                   <p className="text-[#5F708A]">{exam.time}</p>
                 </div>
               </div>
-              <p className="mt-4 rounded-xl bg-[#F7FBFF] p-3 text-sm font-semibold text-[#5F708A]">{exam.preparation}</p>
-              {exam.status === ExamStatus.AVAILABLE && (
-                <button type="button" onClick={() => downloadDemoResult(exam)} className="mt-4 inline-flex h-10 items-center gap-2 rounded-xl border border-[#CFE7FF] px-4 text-sm font-black text-[#0B60C9] hover:bg-[#F7FBFF]">
-                  <Download className="h-4 w-4" />
-                  Baixar resultado
-                </button>
+              {exam.preparation && (
+                <p className="mt-4 rounded-xl bg-[#F7FBFF] p-3 text-sm font-semibold text-[#5F708A] whitespace-pre-wrap">
+                  {exam.preparation}
+                </p>
               )}
+              <div className="mt-4 flex flex-wrap gap-2">
+                {exam.status === ExamStatus.AVAILABLE && (
+                  <button type="button" onClick={() => downloadDemoResult(exam)} className="inline-flex h-10 items-center gap-2 rounded-xl border border-[#CFE7FF] px-4 text-sm font-black text-[#0B60C9] hover:bg-[#F7FBFF]">
+                    <Download className="h-4 w-4" />
+                    Baixar resultado
+                  </button>
+                )}
+                {exam.status === ExamStatus.SCHEDULED && (
+                  <button type="button" onClick={() => cancelExam(exam)} className="inline-flex h-10 items-center gap-2 rounded-xl border border-red-200 px-4 text-sm font-black text-red-600 hover:bg-red-50">
+                    <X className="h-4 w-4" />
+                    Cancelar agendamento
+                  </button>
+                )}
+              </div>
             </article>
           ))}
         </div>

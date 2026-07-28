@@ -25,7 +25,8 @@ export const ExamTypes: React.FC = () => {
     isGlobal: true,
     maxDailyAppointments: 20,
     unitIds: [],
-    schedule: []
+    schedule: [],
+    requiresReferral: true
   };
 
   const [formData, setFormData] = useState<Partial<ExamType>>(defaultForm);
@@ -54,7 +55,8 @@ export const ExamTypes: React.FC = () => {
       schedule: spec.schedule || [],
       unitIds: spec.unitIds || [],
       isGlobal: spec.isGlobal ?? true,
-      maxDailyAppointments: spec.maxDailyAppointments || 20
+      maxDailyAppointments: spec.maxDailyAppointments || 20,
+      requiresReferral: spec.requiresReferral ?? true
     });
     setEditingId(spec.id);
     setShowModal(true);
@@ -69,7 +71,9 @@ export const ExamTypes: React.FC = () => {
         isGlobal: formData.isGlobal,
         maxDailyAppointments: formData.maxDailyAppointments,
         unitIds: formData.isGlobal ? [] : formData.unitIds,
-        schedule: formData.schedule
+        schedule: formData.schedule,
+        preparation: formData.preparation,
+        requiresReferral: formData.requiresReferral
     };
 
     if (editingId) {
@@ -277,6 +281,16 @@ export const ExamTypes: React.FC = () => {
                </div>
 
                <div>
+                    <label className="flex items-center gap-2 cursor-pointer mb-3">
+                        <input 
+                            type="checkbox" 
+                            className="w-4 h-4 text-primary focus:ring-primary border-slate-300 rounded"
+                            checked={formData.requiresReferral}
+                            onChange={(e) => setFormData({...formData, requiresReferral: e.target.checked})}
+                        />
+                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Obrigatório anexo de encaminhamento</span>
+                    </label>
+
                     <label className="flex items-center gap-2 cursor-pointer mb-3">
                         <input 
                             type="checkbox" 

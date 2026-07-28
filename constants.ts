@@ -117,11 +117,12 @@ export const MOCK_APPOINTMENTS: Appointment[] = [
   { id: '501', patientId: '101', doctorId: '2', unitId: '1', date: new Date().toISOString().split('T')[0], time: '09:00', status: AppointmentStatus.SCHEDULED, notes: 'Checkup anual' },
 ];
 
-export const STATUS_LABELS: Record<AppointmentStatus, string> = {
+export const STATUS_LABELS: Record<string, string> = {
   [AppointmentStatus.SCHEDULED]: 'Agendado',
   [AppointmentStatus.COMPLETED]: 'Concluído',
   [AppointmentStatus.CANCELLED]: 'Cancelado',
-  [AppointmentStatus.NO_SHOW]: 'Não Compareceu'
+  [AppointmentStatus.NO_SHOW]: 'Não Compareceu',
+  'AVAILABLE': 'Disponível'
 };
 
 export const ROLE_LABELS: Record<UserRole, string> = {
