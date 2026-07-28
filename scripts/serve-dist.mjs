@@ -155,7 +155,9 @@ const mapUnit = row => ({
   operatingHours: row.operating_hours ?? undefined,
   secondaryActivities: row.secondary_activities ?? undefined,
   services: row.services ?? undefined,
-  isHospital: row.is_hospital ?? false
+  isHospital: row.is_hospital ?? false,
+  toleranceMinutes: row.tolerance_minutes !== null ? row.tolerance_minutes : 15,
+  autoCancelNoShow: row.auto_cancel_no_show !== null ? row.auto_cancel_no_show : true
 });
 
 const mapUser = row => ({
@@ -879,12 +881,14 @@ app.patch('/api/units/:id', authenticate, authorize('ADMIN', 'GENERAL_SUPERVISOR
     const current = await pool.query('SELECT * FROM units WHERE id = $1', [req.params.id]);
     if (!current.rows[0]) return res.status(404).json({ error: 'Unidade nao encontrada.' });
     
+    const toleranceMinutes = req.body.toleranceMinutes !== undefined ? req.body.toleranceMinutes : (current.rows[0].tolerance_minutes ?? 15);
+    const autoCancelNoShow = req.body.autoCancelNoShow !== undefined ? req.body.autoCancelNoShow : (current.rows[0].auto_cancel_no_show ?? true);
     const row = current.rows[0];
     const localOverride = row.cnes_code ? true : row.local_override;
 
     const { rows } = await pool.query(
-      'UPDATE units SET name = $1, address = $2, phone = $3, cep = $4, address_number = $5, neighborhood = $6, city = $7, state = $8, attendance_type = $9, local_override = $10, is_hospital = $11 WHERE id = $12 RETURNING *',
-      [name, address, phone, cep, addressNumber, neighborhood, city, state, attendanceType, localOverride, isHospital, req.params.id]
+      'UPDATE units SET name = $1, address = $2, phone = $3, cep = $4, address_number = $5, neighborhood = $6, city = $7, state = $8, attendance_type = $9, local_override = $10, is_hospital = $11, tolerance_minutes = $13, auto_cancel_no_show = $14 WHERE id = $12 RETURNING *',
+      [name, address, phone, cep, addressNumber, neighborhood, city, state, attendanceType, localOverride, isHospital, req.params.id, toleranceMinutes, autoCancelNoShow]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Unidade nao encontrada.' });
     await audit(req, 'UPDATE', 'unit', req.params.id);
@@ -1898,6 +1902,53 @@ const syncCnes = async () => {
 };
 
 cron.schedule('0 2 * * *', syncCnes);
+
+// Cron Job para cancelar agendamentos atrasados
+cron.schedule('*/5 * * * *', async () => {
+  try {
+    const now = new Date();
+    const currentDate = now.toISOString().split('T')[0];
+    
+    // Calcula o limite considerando a tolerancia de cada unidade
+    const { rows: appointments } = await pool.query(`
+      SELECT a.id, a.date, a.time, u.tolerance_minutes, u.auto_cancel_no_show
+      FROM appointments a
+      JOIN units u ON a.unit_id = u.id
+      WHERE a.status = 'SCHEDULED' 
+      AND a.date <= $1
+      AND u.auto_cancel_no_show = true
+    `, [currentDate]);
+
+    let cancelledCount = 0;
+    
+    for (const appt of appointments) {
+      if (appt.date < currentDate) {
+        // Dias anteriores
+        await pool.query('UPDATE appointments SET status = $1 WHERE id = $2', ['CANCELLED', appt.id]);
+        cancelledCount++;
+      } else if (appt.date === currentDate) {
+        // Hoje, validar horario + tolerancia
+        const [hour, minute] = appt.time.split(':').map(Number);
+        const tolerance = appt.tolerance_minutes || 15;
+        
+        const apptTime = new Date();
+        apptTime.setHours(hour, minute, 0, 0);
+        apptTime.setMinutes(apptTime.getMinutes() + tolerance);
+
+        if (now > apptTime) {
+          await pool.query('UPDATE appointments SET status = $1 WHERE id = $2', ['CANCELLED', appt.id]);
+          cancelledCount++;
+        }
+      }
+    }
+    
+    if (cancelledCount > 0) {
+      console.log(`[Auto-Cancel] ${cancelledCount} agendamentos foram cancelados por falta/atraso.`);
+    }
+  } catch (err) {
+    console.error('[Auto-Cancel] Falha ao executar rotina de cancelamento:', err);
+  }
+});
 
 app.post('/api/sync/cnes', authenticate, authorize('ADMIN', 'GENERAL_SUPERVISOR'), async (req, res, next) => {
   try {

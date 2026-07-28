@@ -10,6 +10,8 @@ import {
   PhoneCall,
   Search,
   Users,
+  Settings,
+  X
 } from 'lucide-react';
 
 interface ReceptionProps {
@@ -21,6 +23,8 @@ export const Reception: React.FC<ReceptionProps> = ({ user }) => {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [doctors, setDoctors] = useState<User[]>([]);
   const [unit, setUnit] = useState<HealthUnit | null>(null);
+  const [showConfig, setShowConfig] = useState(false);
+  const [configForm, setConfigForm] = useState({ toleranceMinutes: 15, autoCancelNoShow: true });
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -39,6 +43,13 @@ export const Reception: React.FC<ReceptionProps> = ({ user }) => {
       setPatients(pts);
       setDoctors(docs);
       setUnit(unitData);
+      
+      if (unitData) {
+        setConfigForm(prev => ({
+          toleranceMinutes: unitData.toleranceMinutes ?? 15,
+          autoCancelNoShow: unitData.autoCancelNoShow ?? true
+        }));
+      }
     } catch (error) {
       console.error('Erro ao carregar dados da recepção', error);
     }
@@ -58,6 +69,17 @@ export const Reception: React.FC<ReceptionProps> = ({ user }) => {
   const callToTV = async (apptId: string) => {
     await api.appointments.call(apptId);
     loadData();
+  };
+
+  const saveConfig = async () => {
+    if (!unit) return;
+    try {
+      await api.units.update(unit.id, configForm);
+      setShowConfig(false);
+      loadData();
+    } catch (error) {
+      console.error('Erro ao salvar configuração', error);
+    }
   };
 
   const getPatientName = (id: string) => patients.find(patient => patient.id === id)?.name || 'Desconhecido';
@@ -83,15 +105,25 @@ export const Reception: React.FC<ReceptionProps> = ({ user }) => {
           <h2>Gerencie o fluxo da unidade</h2>
           <p>Check-in, fila de espera, senhas e chamadas em um só painel.</p>
         </div>
-        {isSenhaMode && (
+        <div className="flex gap-3">
           <button
-            className="button button-primary"
-            onClick={() => window.open('/display-tv', '_blank')}
+            className="button button-secondary flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg font-semibold transition-colors"
+            onClick={() => setShowConfig(true)}
+            title="Configurações da Unidade"
             type="button"
           >
-            <MonitorPlay size={19} /> Abrir Painel de TV
+            <Settings size={19} /> Configurações
           </button>
-        )}
+          {isSenhaMode && (
+            <button
+              className="button button-primary"
+              onClick={() => window.open('/display-tv', '_blank')}
+              type="button"
+            >
+              <MonitorPlay size={19} /> Abrir Painel de TV
+            </button>
+          )}
+        </div>
       </section>
 
       <section className="reception-metrics">
@@ -213,6 +245,65 @@ export const Reception: React.FC<ReceptionProps> = ({ user }) => {
           )}
         </aside>
       </section>
+
+      {showConfig && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-slate-800">
+            <div className="mb-6 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white">Configurações da Unidade</h2>
+              <button
+                className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
+                onClick={() => setShowConfig(false)}
+                type="button"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="grid gap-5">
+              <label className="flex cursor-pointer items-center justify-between rounded-xl border border-slate-200 p-4 transition-colors hover:border-slate-300 dark:border-slate-700 dark:hover:border-slate-600">
+                <div>
+                  <strong className="block text-sm font-semibold text-slate-900 dark:text-white">Cancelamento Automático</strong>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">Cancela agendamentos após a tolerância</span>
+                </div>
+                <input 
+                  type="checkbox" 
+                  className="h-5 w-5 accent-[#0B60C9]" 
+                  checked={configForm.autoCancelNoShow} 
+                  onChange={(e) => setConfigForm(prev => ({ ...prev, autoCancelNoShow: e.target.checked }))} 
+                />
+              </label>
+              
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">Tempo de Tolerância (minutos)</label>
+                <select 
+                  className="w-full rounded-xl border border-slate-300 bg-slate-50 p-3 text-slate-900 outline-none transition-all focus:bg-white focus:ring-2 focus:ring-[#0B60C9] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                  value={configForm.toleranceMinutes}
+                  onChange={(e) => setConfigForm(prev => ({ ...prev, toleranceMinutes: Number(e.target.value) }))}
+                  disabled={!configForm.autoCancelNoShow}
+                >
+                  <option value={0}>0 min (sem tolerância)</option>
+                  <option value={5}>5 minutos</option>
+                  <option value={10}>10 minutos</option>
+                  <option value={15}>15 minutos</option>
+                  <option value={30}>30 minutos</option>
+                  <option value={45}>45 minutos</option>
+                  <option value={60}>60 minutos (1 hora)</option>
+                </select>
+                <p className="mt-2 text-xs text-slate-500">Agendamentos atrasados além deste limite serão marcados como Cancelado caso o paciente não faça o Check-in na recepção.</p>
+              </div>
+              
+              <button 
+                className="mt-2 w-full rounded-xl bg-[#0B60C9] py-3 text-sm font-semibold text-white shadow-lg shadow-blue-500/20 transition-all hover:bg-blue-700 hover:shadow-blue-500/40"
+                onClick={saveConfig}
+                type="button"
+              >
+                Salvar alterações
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

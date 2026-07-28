@@ -68,6 +68,8 @@ export interface HealthUnit {
   secondaryActivities?: string[];
   services?: HealthUnitService[];
   isHospital?: boolean;
+  toleranceMinutes?: number;
+  autoCancelNoShow?: boolean;
 }
 
 export interface HealthUnitService {

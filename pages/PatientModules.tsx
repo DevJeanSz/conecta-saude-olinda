@@ -315,16 +315,19 @@ export const PatientAppointmentsPage: React.FC<PatientPageProps> = ({ user }) =>
                           <strong className="text-[#10223F]">{doctor?.name || 'Profissional de saÃºde'}</strong>
                         </div>
                         <div>
-                          <span className="block text-xs font-black uppercase text-[#8A99AD]">Data e horÃ¡rio</span>
-                          <strong className="text-[#10223F]">{formatDate(appointment.date)} Ã s {appointment.time}</strong>
+                          <strong className="text-[#10223F]">{doctor?.name || 'Profissional de saúde'}</strong>
+                        </div>
+                        <div>
+                          <span className="block text-xs font-black uppercase text-[#8A99AD]">Data e horário</span>
+                          <strong className="text-[#10223F]">{formatDate(appointment.date)} às {appointment.time}</strong>
                         </div>
                         <div>
                           <span className="block text-xs font-black uppercase text-[#8A99AD]">Senha/Check-in</span>
-                          <strong className="text-[#10223F]">{appointment.queuePassword || 'DisponÃ­vel na recepÃ§Ã£o'}</strong>
+                          <strong className="text-[#10223F]">{appointment.queuePassword || 'Disponível na recepção'}</strong>
                         </div>
                         {appointment.notes && (
                           <div className="sm:col-span-2">
-                            <span className="block text-xs font-black uppercase text-[#8A99AD]">ObservaÃ§Ãµes</span>
+                            <span className="block text-xs font-black uppercase text-[#8A99AD]">Observações</span>
                             <p className="text-[#10223F]">{appointment.notes}</p>
                           </div>
                         )}

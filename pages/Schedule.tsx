@@ -8,6 +8,7 @@ import {
   Specialty,
   HealthUnit,
   Exam,
+  ExamStatus,
 } from '../types';
 import { api } from '../services/api';
 import { STATUS_LABELS } from '../constants';
@@ -637,7 +638,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
         if (type === 'appointment') {
           updated = await api.appointments.cancel(id, reason.trim());
         } else {
-          updated = await api.exams.update(id, { status: 'CANCELLED' }); 
+          updated = await api.exams.update(id, { status: ExamStatus.CANCELLED }); 
         }
         await loadData();
         if (showDetailModal && showDetailModal.data.id === id) {
@@ -654,7 +655,7 @@ export const Schedule: React.FC<ScheduleProps> = ({ user }) => {
       if (type === 'appointment') {
         updated = await api.appointments.update(id, { status: status as AppointmentStatus });
       } else {
-        updated = await api.exams.update(id, { status });
+        updated = await api.exams.update(id, { status: status as ExamStatus });
       }
       await loadData();
       if (showDetailModal && showDetailModal.data.id === id) {
