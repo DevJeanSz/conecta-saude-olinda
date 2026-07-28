@@ -1924,7 +1924,7 @@ cron.schedule('*/5 * * * *', async () => {
     for (const appt of appointments) {
       if (appt.date < currentDate) {
         // Dias anteriores
-        await pool.query('UPDATE appointments SET status = $1 WHERE id = $2', ['CANCELLED', appt.id]);
+        await pool.query('UPDATE appointments SET status = $1 WHERE id = $2', ['NO_SHOW', appt.id]);
         cancelledCount++;
       } else if (appt.date === currentDate) {
         // Hoje, validar horario + tolerancia
@@ -1936,7 +1936,7 @@ cron.schedule('*/5 * * * *', async () => {
         apptTime.setMinutes(apptTime.getMinutes() + tolerance);
 
         if (now > apptTime) {
-          await pool.query('UPDATE appointments SET status = $1 WHERE id = $2', ['CANCELLED', appt.id]);
+          await pool.query('UPDATE appointments SET status = $1 WHERE id = $2', ['NO_SHOW', appt.id]);
           cancelledCount++;
         }
       }
