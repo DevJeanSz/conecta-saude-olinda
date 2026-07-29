@@ -107,7 +107,11 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   const handleGlobalSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (globalSearch.trim()) {
-      navigate(`/admin/patients?q=${encodeURIComponent(globalSearch.trim())}`);
+      if (searchResults.length > 0) {
+        navigate(searchResults[0].path);
+      } else {
+        navigate(`/admin/patients?q=${encodeURIComponent(globalSearch.trim())}`);
+      }
       setShowSearchResults(false);
       setGlobalSearch('');
     }

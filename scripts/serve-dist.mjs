@@ -2505,6 +2505,7 @@ const syncCnes = async () => {
      // Limpar sujeira de sincronizações anteriores incorretas (ex: SP/RJ) e clínicas privadas
      await pool.query("DELETE FROM units WHERE cnes_code IS NOT NULL AND (city IS NULL OR city NOT ILIKE '%Olinda%') AND local_override = false");
      await pool.query("DELETE FROM units WHERE esfera_administrativa = 'PRIVADA' AND local_override = false");
+     await pool.query("DELETE FROM units WHERE natureza_juridica LIKE '2%' AND local_override = false");
      setSyncProgress({ progress: 15, message: 'Limpando dados inconsistentes...' });
 
       const ibgeCode = '260960'; // Olinda (6 digits - IMPORTANTE: a API só aceita 6 dígitos)
@@ -2538,6 +2539,12 @@ const syncCnes = async () => {
         // Filtra estabelecimentos estritamente públicos (Remove PRIVADA mesmo que diga atender SUS)
         const estabelecimentos = allRawEstabelecimentos.filter(est => {
             const esfera = (est.descricao_esfera_administrativa || '').toUpperCase();
+            const natureza = String(est.descricao_natureza_juridica_estabelecimento || '');
+            
+            // O CNES às vezes cadastra empresas privadas (natureza jurídica 2xxx) com esfera MUNICIPAL
+            // Devemos bloquear qualquer entidade empresarial (código de natureza começando com 2)
+            if (natureza.startsWith('2')) return false;
+
             return esfera === 'MUNICIPAL' || esfera === 'ESTADUAL' || esfera === 'FEDERAL';
         });
 
