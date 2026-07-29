@@ -31,6 +31,7 @@ interface LayoutProps {
   onLogout: () => void;
 }
 
+
 const menuItems = [
   { label: 'Dashboard', path: '/admin', icon: LayoutDashboard, roles: [UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR, UserRole.ATTENDANT, UserRole.DOCTOR, UserRole.SOCIAL_WORKER] },
   { label: 'Unidades', path: '/admin/units', icon: Building2, roles: [UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR] },
@@ -70,6 +71,57 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   const [unitName, setUnitName] = useState('Carregando...');
   const { theme, setTheme } = useTheme();
 
+  const [globalSearch, setGlobalSearch] = useState('');
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const [searchResults, setSearchResults] = useState<{ path: string, label: string, icon: any }[]>([]);
+  const notifMenuRef = React.useRef<HTMLDivElement>(null);
+  const searchRef = React.useRef<HTMLLabelElement>(null);
+
+  // Close menus on outside click
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (notifMenuRef.current && !notifMenuRef.current.contains(event.target as Node)) {
+        setShowNotifMenu(false);
+      }
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setShowSearchResults(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Handle global search
+  React.useEffect(() => {
+    if (!globalSearch.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    const term = globalSearch.toLowerCase();
+    const results = menuItems
+      .filter(item => item.roles.includes(user.role))
+      .filter(item => item.label.toLowerCase().includes(term));
+    setSearchResults(results);
+  }, [globalSearch, user.role]);
+
+  const handleGlobalSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (globalSearch.trim()) {
+      navigate(`/admin/patients?q=${encodeURIComponent(globalSearch.trim())}`);
+      setShowSearchResults(false);
+      setGlobalSearch('');
+    }
+  };
+
+  const loadNotifications = async () => {
+      try {
+        const notifs = await api.notifications.getForUser();
+        setNotifications(Array.isArray(notifs) ? notifs : []);
+      } catch {
+        setNotifications([]);
+      }
+    };
+
   useEffect(() => {
     const loadUnit = async () => {
       if (!user.unitId) {
@@ -79,16 +131,6 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
       const unit = await api.units.getById(user.unitId);
       setUnitName(unit?.name || 'Rede municipal');
     };
-
-    const checkNotifs = async () => {
-      try {
-        const notifs = await api.notifications.getForUser();
-        setNotifications(Array.isArray(notifs) ? notifs : []);
-      } catch {
-        setNotifications([]);
-      }
-    };
-
     const checkTodayAppointments = async () => {
       try {
         const today = new Date().toISOString().split('T')[0];
@@ -107,7 +149,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
     };
 
     loadUnit();
-    checkNotifs();
+    loadNotifications();
     checkTodayAppointments();
 
     const socket = io(apiOrigin);
@@ -187,9 +229,68 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
             <h1>{title}</h1>
           </div>
           <div className="admin-top-actions">
-            <label className="admin-search">
+            <label className="admin-search" ref={searchRef}>
               <Search size={18} />
-              <input aria-label="Buscar" placeholder="Buscar no sistema..." />
+              <form onSubmit={handleGlobalSearchSubmit} className="flex-1 w-full m-0 p-0">
+                <input
+                  aria-label="Buscar"
+                  placeholder="Buscar pacientes ou menus..."
+                  value={globalSearch}
+                  onChange={e => {
+                    setGlobalSearch(e.target.value);
+                    setShowSearchResults(true);
+                  }}
+                  onFocus={() => setShowSearchResults(true)}
+                  className="w-full bg-transparent border-none outline-none m-0 p-0"
+                />
+              </form>
+              
+              {showSearchResults && globalSearch.trim() && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-lg z-50 overflow-hidden">
+                  <div className="p-2 border-b border-slate-100 dark:border-slate-800 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                    Menus e Páginas
+                  </div>
+                  {searchResults.map((result, idx) => {
+                    const Icon = result.icon;
+                    return (
+                      <button
+                        key={idx}
+                        className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                        onClick={() => {
+                          navigate(result.path);
+                          setShowSearchResults(false);
+                          setGlobalSearch('');
+                        }}
+                        type="button"
+                      >
+                        <Icon size={18} className="text-slate-400" />
+                        <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{result.label}</span>
+                      </button>
+                    );
+                  })}
+                  {searchResults.length === 0 && (
+                    <div className="px-4 py-3 text-sm text-slate-500">Nenhum menu encontrado.</div>
+                  )}
+                  
+                  <div className="p-2 border-b border-slate-100 dark:border-slate-800 border-t text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                    Pacientes
+                  </div>
+                  <button
+                    className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-primary/5 dark:hover:bg-primary/10 transition-colors text-primary"
+                    onClick={() => {
+                      navigate(`/admin/patients?q=${encodeURIComponent(globalSearch.trim())}`);
+                      setShowSearchResults(false);
+                      setGlobalSearch('');
+                    }}
+                    type="button"
+                  >
+                    <Search size={18} />
+                    <span className="text-sm font-medium">
+                      Buscar "<strong>{globalSearch}</strong>" nos pacientes
+                    </span>
+                  </button>
+                </div>
+              )}
             </label>
 
             <button

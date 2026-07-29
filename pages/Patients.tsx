@@ -3,6 +3,7 @@ import { Patient, User, HealthUnit } from '../types';
 import { api } from '../services/api';
 import { Plus, Search, User as UserIcon, Users as UsersIcon, Download, MapPin, FileText, Edit2, Upload, Trash2, X, AlertCircle } from 'lucide-react';
 import { buscarCEP, validarCNS, formatCEP } from '../src/utils/validators';
+import { useLocation } from 'react-router-dom';
 
 export const Patients: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -15,6 +16,15 @@ export const Patients: React.FC = () => {
   const [isImporting, setIsImporting] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [units, setUnits] = useState<HealthUnit[]>([]);
+  const location = useLocation();
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const q = params.get('q');
+    if (q) {
+      setSearchTerm(q);
+    }
+  }, [location.search]);
 
   useEffect(() => {
     const loadPatients = async () => {

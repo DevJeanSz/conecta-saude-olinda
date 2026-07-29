@@ -2502,8 +2502,9 @@ const syncCnes = async () => {
   console.log('[CNES Sync] Iniciando sincronizacao com API de Dados Abertos (Olinda)...');
   setSyncProgress({ progress: 10, message: 'Iniciando busca no CNES...' });
   try {
-     // Limpar sujeira de sincronizações anteriores incorretas (ex: SP/RJ)
+     // Limpar sujeira de sincronizações anteriores incorretas (ex: SP/RJ) e clínicas privadas
      await pool.query("DELETE FROM units WHERE cnes_code IS NOT NULL AND (city IS NULL OR city NOT ILIKE '%Olinda%') AND local_override = false");
+     await pool.query("DELETE FROM units WHERE esfera_administrativa = 'PRIVADA' AND local_override = false");
      setSyncProgress({ progress: 15, message: 'Limpando dados inconsistentes...' });
 
       const ibgeCode = '260960'; // Olinda (6 digits - IMPORTANTE: a API só aceita 6 dígitos)
@@ -2534,11 +2535,10 @@ const syncCnes = async () => {
       }
 
       if (isSuccess) {
-        // Filtra estabelecimentos públicos OU privados que atendem SUS (hospitais filantrópicos/conveniados)
+        // Filtra estabelecimentos estritamente públicos (Remove PRIVADA mesmo que diga atender SUS)
         const estabelecimentos = allRawEstabelecimentos.filter(est => {
             const esfera = (est.descricao_esfera_administrativa || '').toUpperCase();
-            const atendeSus = est.estabelecimento_faz_atendimento_ambulatorial_sus === 'SIM';
-            return esfera === 'MUNICIPAL' || esfera === 'ESTADUAL' || esfera === 'FEDERAL' || (esfera === 'PRIVADA' && atendeSus);
+            return esfera === 'MUNICIPAL' || esfera === 'ESTADUAL' || esfera === 'FEDERAL';
         });
 
         setSyncProgress({ progress: 30, message: `Encontrados ${estabelecimentos.length} estabelecimentos SUS. Atualizando banco...` });
