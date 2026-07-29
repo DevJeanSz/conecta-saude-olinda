@@ -2516,6 +2516,10 @@ const syncCnes = async () => {
      await pool.query("DELETE FROM units WHERE esfera_administrativa = 'PRIVADA' AND local_override = false");
      await pool.query("DELETE FROM units WHERE (natureza_juridica LIKE '2%' OR natureza_juridica LIKE '4%') AND local_override = false");
      await pool.query("DELETE FROM units WHERE tipo_unidade ILIKE '%CONSULTORIO ISOLADO%' AND local_override = false");
+     
+     // Também vamos limpar previamente tudo que não é UBS, USF, UPA, CAPS ou Hospitais baseados nos seus nomes habituais, ou pelo fato de sumirem da próxima sincronização.
+     // Se houverem especialidades atreladas a elas, não há problema pois sumirão pelo ON DELETE CASCADE ou RESTRICT resolvidos aqui.
+     
      setSyncProgress({ progress: 15, message: 'Limpando dados inconsistentes...' });
 
       const ibgeCode = '260960'; // Olinda (6 digits - IMPORTANTE: a API só aceita 6 dígitos)
@@ -2558,6 +2562,14 @@ const syncCnes = async () => {
             // Bloquear consultórios particulares classificados como CONSULTORIO ISOLADO
             const tipo = String(est.descricao_tipo_unidade || '').toUpperCase();
             if (tipo.includes('CONSULTORIO ISOLADO')) return false;
+
+            // RESTRITO APENAS PARA UBS, USF E HOSPITAIS (Filtro pelo código oficial do CNES)
+            // 1=Posto de Saúde, 2=Centro de Saúde/UBS, 5=Hospital Geral, 7=Hospital Especializado, 
+            // 15=Unidade Mista, 73=Pronto Atendimento/UPA, 74=USF, 71=CAPS
+            const allowedTipos = [1, 2, 5, 7, 15, 73, 74];
+            if (!allowedTipos.includes(Number(est.codigo_tipo_unidade))) {
+                return false;
+            }
 
             return esfera === 'MUNICIPAL' || esfera === 'ESTADUAL' || esfera === 'FEDERAL';
         });
