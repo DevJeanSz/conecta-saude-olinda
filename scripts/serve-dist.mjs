@@ -36,6 +36,8 @@ const allowOrigin = (origin, callback) => {
   return callback(new Error('Origem nao permitida pelo CORS.'));
 };
 const app = express();
+app.set('trust proxy', 1); // Confia no primeiro proxy (Railway/Render) para evitar erro de X-Forwarded-For no rate-limit
+
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
@@ -850,6 +852,7 @@ const ensureSchemaAndSeed = async () => {
     'ALTER TABLE units ADD COLUMN IF NOT EXISTS esfera_administrativa text;',
     'ALTER TABLE units ADD COLUMN IF NOT EXISTS natureza_juridica text;',
     'ALTER TABLE units ADD COLUMN IF NOT EXISTS atende_sus boolean DEFAULT true;',
+    'ALTER TABLE units ADD COLUMN IF NOT EXISTS tolerance_minutes integer DEFAULT 15;',
     'ALTER TABLE units ADD COLUMN IF NOT EXISTS fluxo_atendimento text;',
     'ALTER TABLE units ADD COLUMN IF NOT EXISTS situacao text;',
     'ALTER TABLE units ADD COLUMN IF NOT EXISTS ultima_atualizacao text;',
@@ -2503,7 +2506,13 @@ const syncCnes = async () => {
   setSyncProgress({ progress: 10, message: 'Iniciando busca no CNES...' });
   try {
      // Limpar sujeira de sincronizações anteriores incorretas (ex: SP/RJ) e clínicas privadas
+     await pool.query("DELETE FROM appointments WHERE unit_id IN (SELECT id FROM units WHERE cnes_code IS NOT NULL AND (city IS NULL OR city NOT ILIKE '%Olinda%') AND local_override = false)");
+     await pool.query("DELETE FROM user_units WHERE unit_id IN (SELECT id FROM units WHERE cnes_code IS NOT NULL AND (city IS NULL OR city NOT ILIKE '%Olinda%') AND local_override = false)");
      await pool.query("DELETE FROM units WHERE cnes_code IS NOT NULL AND (city IS NULL OR city NOT ILIKE '%Olinda%') AND local_override = false");
+
+     await pool.query("DELETE FROM appointments WHERE unit_id IN (SELECT id FROM units WHERE (esfera_administrativa = 'PRIVADA' OR natureza_juridica LIKE '2%') AND local_override = false)");
+     await pool.query("DELETE FROM user_units WHERE unit_id IN (SELECT id FROM units WHERE (esfera_administrativa = 'PRIVADA' OR natureza_juridica LIKE '2%') AND local_override = false)");
+     await pool.query("DELETE FROM users WHERE unit_id IN (SELECT id FROM units WHERE (esfera_administrativa = 'PRIVADA' OR natureza_juridica LIKE '2%') AND local_override = false)");
      await pool.query("DELETE FROM units WHERE esfera_administrativa = 'PRIVADA' AND local_override = false");
      await pool.query("DELETE FROM units WHERE natureza_juridica LIKE '2%' AND local_override = false");
      setSyncProgress({ progress: 15, message: 'Limpando dados inconsistentes...' });
