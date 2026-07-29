@@ -1,4 +1,4 @@
-import { User, Patient, Appointment, HealthUnit, Specialty, Notification, Exam, ExamType, CareHistoryItem, ReminderPreference, HealthPost, HealthPostPayload } from '../types';
+import { User, Patient, Appointment, HealthUnit, Specialty, Notification, Exam, ExamType, CareHistoryItem, ReminderPreference, HealthPost, HealthPostPayload, Location } from '../types';
 
 const SESSION_USER_KEY = 'health_user';
 const ACCESS_TOKEN_KEY = 'auth_token';
@@ -272,5 +272,14 @@ export const api = {
   system: {
     syncCnes: () => request<void>('/sync/cnes', { method: 'POST' }),
     syncCnesProfessionals: () => request<void>('/sync/cnes/professionals', { method: 'POST' })
+  },
+  locations: {
+    getByUnit: async (unitId: string) => request<Location[]>('/locations', {}, { unitId }).catch(() => []),
+    getAll: async () => request<Location[]>('/locations').catch(() => []),
+    add: (location: { type: string; number: number; unitId?: string }) =>
+      request<Location>('/locations', { method: 'POST', body: JSON.stringify(location) }),
+    update: (id: string, updates: { active?: boolean; number?: number }) =>
+      request<Location>(`/locations/${pathId(id)}`, { method: 'PATCH', body: JSON.stringify(updates) }),
+    delete: (id: string) => request<void>(`/locations/${pathId(id)}`, { method: 'DELETE' })
   }
 };

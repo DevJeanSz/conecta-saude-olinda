@@ -871,7 +871,17 @@ const ensureSchemaAndSeed = async () => {
     'ALTER TABLE units ADD COLUMN IF NOT EXISTS operating_hours jsonb;',
     'ALTER TABLE units ADD COLUMN IF NOT EXISTS secondary_activities text[];',
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS local_override boolean DEFAULT false;',
-    'ALTER TABLE users ADD COLUMN IF NOT EXISTS overridden_fields jsonb DEFAULT \'[]\'::jsonb;'
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS overridden_fields jsonb DEFAULT \'[]\'::jsonb;',
+    `CREATE TABLE IF NOT EXISTS locations (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      unit_id uuid NOT NULL REFERENCES units(id) ON DELETE CASCADE,
+      type text NOT NULL CHECK (type IN ('GUICHE', 'SALA', 'MESA')),
+      number integer NOT NULL,
+      name text NOT NULL,
+      active boolean NOT NULL DEFAULT true,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      UNIQUE(unit_id, type, number)
+    )`
   ];
 
   for (const query of newColumnsQueries) {
@@ -1374,6 +1384,122 @@ app.delete('/api/exam-types/:id', authenticate, authorize('ADMIN', 'GENERAL_SUPE
     next(error);
   }
 });
+
+// ─── ROTAS: LOCAIS (SALAS, MESAS, GUICHÊS) ────────────────────────────────
+
+app.get('/api/locations', authenticate, async (req, res, next) => {
+  try {
+    const params = [];
+    const where = [];
+
+    if (!canManageAllUnits(req)) {
+      params.push(req.user.unitId);
+      where.push(`unit_id = $${params.length}`);
+    } else if (req.query.unitId) {
+      params.push(String(req.query.unitId));
+      where.push(`unit_id = $${params.length}`);
+    }
+
+    const { rows } = await pool.query(
+      `SELECT * FROM locations ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY type, number ASC`,
+      params
+    );
+    res.json(rows.map(r => ({
+      id: r.id,
+      unitId: r.unit_id,
+      type: r.type,
+      number: r.number,
+      name: r.name,
+      active: r.active,
+      createdAt: r.created_at
+    })));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/locations', authenticate, async (req, res, next) => {
+  try {
+    const allowed = ['ADMIN', 'GENERAL_SUPERVISOR', 'ATTENDANT'];
+    if (!allowed.includes(req.user.role)) return res.status(403).json({ error: 'Acesso negado.' });
+
+    const { type, number, unitId } = req.body;
+    if (!type || !['GUICHE', 'SALA', 'MESA'].includes(type)) {
+      return res.status(400).json({ error: 'Tipo inválido. Use GUICHE, SALA ou MESA.' });
+    }
+    const num = parseInt(number);
+    if (!num || num < 1 || num > 999) return res.status(400).json({ error: 'Número inválido.' });
+
+    const targetUnitId = canManageAllUnits(req) ? (unitId || req.user.unitId) : req.user.unitId;
+    if (!targetUnitId) return res.status(400).json({ error: 'Unidade obrigatória.' });
+
+    // Gera o nome padronizado: GUICHÊ 01, SALA 03, MESA 10
+    const typeLabel = type === 'GUICHE' ? 'GUICHÊ' : type;
+    const name = `${typeLabel} ${String(num).padStart(2, '0')}`;
+
+    const { rows } = await pool.query(
+      `INSERT INTO locations (unit_id, type, number, name) VALUES ($1, $2, $3, $4) RETURNING *`,
+      [targetUnitId, type, num, name]
+    );
+    await audit(req, 'INSERT', 'location', rows[0].id);
+    res.status(201).json({ id: rows[0].id, unitId: rows[0].unit_id, type: rows[0].type, number: rows[0].number, name: rows[0].name, active: rows[0].active });
+  } catch (error) {
+    if (error.code === '23505') return res.status(409).json({ error: 'Já existe um local com este tipo e número nesta unidade.' });
+    next(error);
+  }
+});
+
+app.patch('/api/locations/:id', authenticate, async (req, res, next) => {
+  try {
+    const allowed = ['ADMIN', 'GENERAL_SUPERVISOR', 'ATTENDANT'];
+    if (!allowed.includes(req.user.role)) return res.status(403).json({ error: 'Acesso negado.' });
+
+    const current = await pool.query('SELECT * FROM locations WHERE id = $1', [req.params.id]);
+    if (!current.rows[0]) return res.status(404).json({ error: 'Local não encontrado.' });
+    if (!canAccessUnit(req, current.rows[0].unit_id)) return res.status(403).json({ error: 'Acesso negado.' });
+
+    const updates = {};
+    if (typeof req.body.active === 'boolean') updates.active = req.body.active;
+    if (req.body.number) {
+      const num = parseInt(req.body.number);
+      if (!num || num < 1 || num > 999) return res.status(400).json({ error: 'Número inválido.' });
+      const typeLabel = current.rows[0].type === 'GUICHE' ? 'GUICHÊ' : current.rows[0].type;
+      updates.number = num;
+      updates.name = `${typeLabel} ${String(num).padStart(2, '0')}`;
+    }
+
+    if (Object.keys(updates).length === 0) return res.status(400).json({ error: 'Nenhum campo válido para atualizar.' });
+
+    const setClauses = Object.keys(updates).map((k, i) => `${k} = $${i + 2}`).join(', ');
+    const values = [req.params.id, ...Object.values(updates)];
+    const { rows } = await pool.query(`UPDATE locations SET ${setClauses} WHERE id = $1 RETURNING *`, values);
+
+    await audit(req, 'UPDATE', 'location', req.params.id);
+    res.json({ id: rows[0].id, unitId: rows[0].unit_id, type: rows[0].type, number: rows[0].number, name: rows[0].name, active: rows[0].active });
+  } catch (error) {
+    if (error.code === '23505') return res.status(409).json({ error: 'Já existe um local com este tipo e número nesta unidade.' });
+    next(error);
+  }
+});
+
+app.delete('/api/locations/:id', authenticate, async (req, res, next) => {
+  try {
+    const allowed = ['ADMIN', 'GENERAL_SUPERVISOR'];
+    if (!allowed.includes(req.user.role)) return res.status(403).json({ error: 'Acesso negado.' });
+
+    const current = await pool.query('SELECT * FROM locations WHERE id = $1', [req.params.id]);
+    if (!current.rows[0]) return res.status(404).json({ error: 'Local não encontrado.' });
+    if (!canAccessUnit(req, current.rows[0].unit_id)) return res.status(403).json({ error: 'Acesso negado.' });
+
+    await pool.query('DELETE FROM locations WHERE id = $1', [req.params.id]);
+    await audit(req, 'DELETE', 'location', req.params.id);
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ──────────────────────────────────────────────────────────────────────────
 
 app.get('/api/health-posts', async (_req, res, next) => {
   try {

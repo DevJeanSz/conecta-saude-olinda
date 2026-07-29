@@ -18,14 +18,15 @@ interface ReceptionProps {
   user: User;
 }
 
-const COUNTER_OPTIONS = ['GUICHÊ 01', 'GUICHÊ 02', 'GUICHÊ 03', 'GUICHÊ 04', 'GUICHÊ 05'];
+const COUNTER_FALLBACK = ['GUICHÊ 01'];
 
 export const Reception: React.FC<ReceptionProps> = ({ user }) => {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [doctors, setDoctors] = useState<User[]>([]);
   const [unit, setUnit] = useState<HealthUnit | null>(null);
-  const [selectedCounter, setSelectedCounter] = useState(COUNTER_OPTIONS[0]);
+  const [counterOptions, setCounterOptions] = useState<string[]>(COUNTER_FALLBACK);
+  const [selectedCounter, setSelectedCounter] = useState(COUNTER_FALLBACK[0]);
   const [showConfig, setShowConfig] = useState(false);
   const [configForm, setConfigForm] = useState({ toleranceMinutes: 15, autoCancelNoShow: true });
 
@@ -34,11 +35,12 @@ export const Reception: React.FC<ReceptionProps> = ({ user }) => {
   const loadData = async () => {
     if (!user?.unitId) return;
     try {
-      const [appts, pts, docs, unitData] = await Promise.all([
+      const [appts, pts, docs, unitData, locs] = await Promise.all([
         api.appointments.getByUnit(user.unitId),
         api.patients.getByUnit(user.unitId),
         api.users.getDoctorsByUnit(user.unitId),
         api.units.getById(user.unitId),
+        api.locations.getByUnit(user.unitId),
       ]);
 
       const todaysAppts = appts.filter(appointment => appointment.date === today && appointment.status !== AppointmentStatus.CANCELLED);
@@ -46,7 +48,14 @@ export const Reception: React.FC<ReceptionProps> = ({ user }) => {
       setPatients(pts);
       setDoctors(docs);
       setUnit(unitData);
-      
+
+      // Carrega locais ativos; fallback se vazio
+      const activeLocations = locs.filter(l => l.active).map(l => l.name);
+      const opts = activeLocations.length > 0 ? activeLocations : COUNTER_FALLBACK;
+      setCounterOptions(opts);
+      // Mantém seleção atual se ainda válida, senão seleciona o primeiro
+      setSelectedCounter(prev => opts.includes(prev) ? prev : opts[0]);
+
       if (unitData) {
         setConfigForm(prev => ({
           toleranceMinutes: unitData.toleranceMinutes ?? 15,
@@ -210,7 +219,7 @@ export const Reception: React.FC<ReceptionProps> = ({ user }) => {
           <label className="counter-selector">
             Guichê do recepcionista
             <select value={selectedCounter} onChange={(event) => setSelectedCounter(event.target.value)}>
-              {COUNTER_OPTIONS.map(counter => (
+              {counterOptions.map(counter => (
                 <option key={counter} value={counter}>{counter}</option>
               ))}
             </select>

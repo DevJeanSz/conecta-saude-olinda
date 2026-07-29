@@ -29,6 +29,7 @@ import { ExamTypes } from './pages/ExamTypes';
 import { HealthPostsPage } from './pages/HealthPosts';
 import { Units } from './pages/Units';
 import { Users } from './pages/Users';
+import { Locations } from './pages/Locations';
 import { User, UserRole } from './types';
 
 const App: React.FC = () => {
@@ -301,6 +302,16 @@ const App: React.FC = () => {
           )}
         />
         <Route path="/admin/social-assistance" element={<Navigate to="/admin/patients" replace />} />
+        <Route
+          path="/admin/locations"
+          element={(
+            <AdminRoute>
+              <ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.GENERAL_SUPERVISOR, UserRole.ATTENDANT]}>
+                <Locations user={user as User} />
+              </ProtectedRoute>
+            </AdminRoute>
+          )}
+        />
 
         <Route path="/display-tv" element={<DisplayTV user={user} />} />
         <Route path="/tv" element={<Navigate to="/display-tv" replace />} />

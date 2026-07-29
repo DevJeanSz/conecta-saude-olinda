@@ -286,3 +286,15 @@ export interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
 }
+
+export type LocationType = 'GUICHE' | 'SALA' | 'MESA';
+
+export interface Location {
+  id: string;
+  unitId: string;
+  type: LocationType;
+  number: number;
+  name: string;
+  active: boolean;
+  createdAt?: string;
+}
