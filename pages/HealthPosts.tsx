@@ -61,57 +61,68 @@ const resizeImageToPostFormat = (file: File) => new Promise<string>((resolve, re
     return;
   }
 
-  const image = new Image();
-  const objectUrl = URL.createObjectURL(file);
+  const reader = new FileReader();
 
-  image.onload = () => {
-    const canvas = document.createElement('canvas');
-    canvas.width = HEALTH_POST_IMAGE_WIDTH;
-    canvas.height = HEALTH_POST_IMAGE_HEIGHT;
-
-    const context = canvas.getContext('2d');
-    if (!context) {
-      URL.revokeObjectURL(objectUrl);
-      reject(new Error('Nao foi possivel preparar a imagem.'));
+  reader.onload = () => {
+    if (typeof reader.result !== 'string') {
+      reject(new Error('Nao foi possivel ler a imagem.'));
       return;
     }
 
-    const targetRatio = HEALTH_POST_IMAGE_WIDTH / HEALTH_POST_IMAGE_HEIGHT;
-    const sourceRatio = image.width / image.height;
-    const sourceWidth = sourceRatio > targetRatio ? image.height * targetRatio : image.width;
-    const sourceHeight = sourceRatio > targetRatio ? image.height : image.width / targetRatio;
-    const sourceX = (image.width - sourceWidth) / 2;
-    const sourceY = (image.height - sourceHeight) / 2;
+    const image = new Image();
 
-    context.drawImage(
-      image,
-      sourceX,
-      sourceY,
-      sourceWidth,
-      sourceHeight,
-      0,
-      0,
-      HEALTH_POST_IMAGE_WIDTH,
-      HEALTH_POST_IMAGE_HEIGHT,
-    );
+    image.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = HEALTH_POST_IMAGE_WIDTH;
+      canvas.height = HEALTH_POST_IMAGE_HEIGHT;
 
-    let quality = 0.86;
-    let dataUrl = canvas.toDataURL('image/jpeg', quality);
-    while (dataUrl.length > MAX_IMAGE_DATA_URL_LENGTH && quality > 0.58) {
-      quality -= 0.08;
-      dataUrl = canvas.toDataURL('image/jpeg', quality);
-    }
+      const context = canvas.getContext('2d');
+      if (!context) {
+        reject(new Error('Nao foi possivel preparar a imagem.'));
+        return;
+      }
 
-    URL.revokeObjectURL(objectUrl);
-    resolve(dataUrl);
+      const targetRatio = HEALTH_POST_IMAGE_WIDTH / HEALTH_POST_IMAGE_HEIGHT;
+      const sourceRatio = image.width / image.height;
+      const sourceWidth = sourceRatio > targetRatio ? image.height * targetRatio : image.width;
+      const sourceHeight = sourceRatio > targetRatio ? image.height : image.width / targetRatio;
+      const sourceX = (image.width - sourceWidth) / 2;
+      const sourceY = (image.height - sourceHeight) / 2;
+
+      context.drawImage(
+        image,
+        sourceX,
+        sourceY,
+        sourceWidth,
+        sourceHeight,
+        0,
+        0,
+        HEALTH_POST_IMAGE_WIDTH,
+        HEALTH_POST_IMAGE_HEIGHT,
+      );
+
+      let quality = 0.86;
+      let dataUrl = canvas.toDataURL('image/jpeg', quality);
+      while (dataUrl.length > MAX_IMAGE_DATA_URL_LENGTH && quality > 0.58) {
+        quality -= 0.08;
+        dataUrl = canvas.toDataURL('image/jpeg', quality);
+      }
+
+      resolve(dataUrl);
+    };
+
+    image.onerror = () => {
+      reject(new Error('Nao foi possivel ler a imagem.'));
+    };
+
+    image.src = reader.result;
   };
 
-  image.onerror = () => {
-    URL.revokeObjectURL(objectUrl);
+  reader.onerror = () => {
     reject(new Error('Nao foi possivel ler a imagem.'));
   };
 
-  image.src = objectUrl;
+  reader.readAsDataURL(file);
 });
 
 const PostPreview: React.FC<{ post: HealthPostPayload | HealthPost }> = ({ post }) => {
