@@ -103,7 +103,16 @@ app.use(cors({ origin: allowOrigin }));
 app.disable('x-powered-by');
 app.use(compression());
 app.use(helmet({
-  contentSecurityPolicy: false,
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'", ...(configuredOrigins.length ? configuredOrigins : [])]
+    }
+  },
   crossOriginEmbedderPolicy: false
 }));
 app.use(express.json({ limit: '5mb' }));
@@ -728,7 +737,6 @@ const ensureSchemaAndSeed = async () => {
     CREATE INDEX IF NOT EXISTS idx_exams_patient ON exams(patient_id, date);
     CREATE INDEX IF NOT EXISTS idx_care_events_patient ON care_events(patient_id, date);
     CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, read);
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_reference ON notifications(user_id, type, reference_id) WHERE reference_id IS NOT NULL;
     CREATE INDEX IF NOT EXISTS idx_health_posts_public ON health_posts(published, display_order, updated_at DESC);
 
     CREATE TABLE IF NOT EXISTS exam_types (
@@ -1849,7 +1857,23 @@ app.get('/api/appointments', authenticate, async (req, res, next) => {
       where.push(`unit_id = $${params.length}`);
     }
 
-    if (req.query.patientId) {
+    if (req.user.role === 'PATIENT') {
+      const pRes = await pool.query('SELECT id FROM patients WHERE user_id = $1', [req.user.id]);
+      const pIds = pRes.rows.map(r => r.id);
+      if (pIds.length === 0) return res.json([]);
+      
+      if (req.query.patientId && !pIds.includes(req.query.patientId)) {
+        return res.status(403).json({ error: 'Acesso negado.' });
+      }
+      
+      if (req.query.patientId) {
+        params.push(String(req.query.patientId));
+        where.push(`patient_id = $${params.length}`);
+      } else {
+        params.push(pIds);
+        where.push(`patient_id = ANY($${params.length})`);
+      }
+    } else if (req.query.patientId) {
       params.push(String(req.query.patientId));
       where.push(`patient_id = $${params.length}`);
     }
@@ -1878,6 +1902,9 @@ app.post('/api/appointments', authenticate, async (req, res, next) => {
     ]);
 
     if (!patient.rows[0]) return res.status(400).json({ error: 'Paciente invalido.' });
+    if (req.user.role === 'PATIENT' && patient.rows[0].user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Acesso negado. Voce so pode agendar para si mesmo.' });
+    }
     if (!doctor.rows[0]) return res.status(400).json({ error: 'Profissional invalido.' });
     if (!canAccessUnit(req, patient.rows[0].unit_id) || !canAccessUnit(req, doctor.rows[0].unit_id)) {
       return res.status(403).json({ error: 'Acesso negado para os dados enviados.' });
@@ -1936,7 +1963,8 @@ app.patch('/api/appointments/:id/cancel', authenticate, async (req, res, next) =
     if (appointment.status === 'CANCELLED') return res.status(400).json({ error: 'Agendamento ja esta cancelado.' });
 
     if (req.user.role === 'PATIENT') {
-      if (appointment.patient_id !== req.user.id) {
+      const patientRes = await pool.query('SELECT user_id FROM patients WHERE id = $1', [appointment.patient_id]);
+      if (!patientRes.rows[0] || patientRes.rows[0].user_id !== req.user.id) {
         return res.status(403).json({ error: 'Acesso negado.' });
       }
 
@@ -2065,14 +2093,37 @@ app.get('/api/exams', authenticate, async (req, res, next) => {
     const params = [];
     const where = [];
 
-    if (req.query.patientId) {
+    if (req.user.role === 'PATIENT') {
+      const pRes = await pool.query('SELECT id FROM patients WHERE user_id = $1', [req.user.id]);
+      const pIds = pRes.rows.map(r => r.id);
+      if (pIds.length === 0) return res.json([]);
+      
+      if (req.query.patientId && !pIds.includes(req.query.patientId)) {
+        return res.status(403).json({ error: 'Acesso negado.' });
+      }
+      
+      if (req.query.patientId) {
+        params.push(String(req.query.patientId));
+        where.push(`patient_id = $${params.length}`);
+      } else {
+        params.push(pIds);
+        where.push(`patient_id = ANY($${params.length})`);
+      }
+    } else if (req.query.patientId) {
       params.push(String(req.query.patientId));
       where.push(`patient_id = $${params.length}`);
     }
 
     if (!canManageAllUnits(req)) {
-      params.push(req.user.unitId);
-      where.push(`unit_id = $${params.length}`);
+      if (req.user.role === 'PATIENT') {
+        if (req.query.unitId) {
+          params.push(String(req.query.unitId));
+          where.push(`unit_id = $${params.length}`);
+        }
+      } else {
+        params.push(req.user.unitId);
+        where.push(`unit_id = $${params.length}`);
+      }
     } else if (req.query.unitId) {
       params.push(String(req.query.unitId));
       where.push(`unit_id = $${params.length}`);
@@ -2097,6 +2148,9 @@ app.post('/api/exams', authenticate, async (req, res, next) => {
 
     const patient = await pool.query('SELECT * FROM patients WHERE id = $1', [patientId]);
     if (!patient.rows[0]) return res.status(400).json({ error: 'Paciente invalido.' });
+    if (req.user.role === 'PATIENT' && patient.rows[0].user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Acesso negado. Voce so pode agendar para si mesmo.' });
+    }
 
     const { rows } = await pool.query(
       `INSERT INTO exams (patient_id, unit_id, type, request_code, date, time, preparation, referral_attachment)
@@ -2188,6 +2242,12 @@ app.patch('/api/exams/:id/cancel', authenticate, async (req, res, next) => {
     const current = await pool.query('SELECT * FROM exams WHERE id = $1', [req.params.id]);
     if (!current.rows[0]) return res.status(404).json({ error: 'Exame nao encontrado.' });
     if (!canAccessUnit(req, current.rows[0].unit_id)) return res.status(403).json({ error: 'Acesso negado.' });
+    if (req.user.role === 'PATIENT') {
+      const patientRes = await pool.query('SELECT user_id FROM patients WHERE id = $1', [current.rows[0].patient_id]);
+      if (!patientRes.rows[0] || patientRes.rows[0].user_id !== req.user.id) {
+        return res.status(403).json({ error: 'Acesso negado.' });
+      }
+    }
     const { rows } = await pool.query('UPDATE exams SET status = $1, cancel_reason = $2 WHERE id = $3 RETURNING *', ['CANCELLED', reason, req.params.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Exame não encontrado.' });
     await audit(req, 'UPDATE', 'exam', req.params.id);
@@ -2202,14 +2262,32 @@ app.get('/api/care-history', authenticate, async (req, res, next) => {
     const params = [];
     const where = [];
 
-    if (req.query.patientId) {
+    if (req.user.role === 'PATIENT') {
+      const pRes = await pool.query('SELECT id FROM patients WHERE user_id = $1', [req.user.id]);
+      const pIds = pRes.rows.map(r => r.id);
+      if (pIds.length === 0) return res.json([]);
+      
+      if (req.query.patientId && !pIds.includes(req.query.patientId)) {
+        return res.status(403).json({ error: 'Acesso negado.' });
+      }
+      
+      if (req.query.patientId) {
+        params.push(String(req.query.patientId));
+        where.push(`patient_id = $${params.length}`);
+      } else {
+        params.push(pIds);
+        where.push(`patient_id = ANY($${params.length})`);
+      }
+    } else if (req.query.patientId) {
       params.push(String(req.query.patientId));
       where.push(`patient_id = $${params.length}`);
     }
 
     if (!canManageAllUnits(req)) {
-      params.push(req.user.unitId);
-      where.push(`unit_id = $${params.length}`);
+      if (req.user.role !== 'PATIENT') {
+        params.push(req.user.unitId);
+        where.push(`unit_id = $${params.length}`);
+      }
     }
 
     const { rows } = await pool.query(`SELECT * FROM care_events ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY date DESC`, params);
