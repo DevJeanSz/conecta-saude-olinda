@@ -2510,11 +2510,12 @@ const syncCnes = async () => {
      await pool.query("DELETE FROM user_units WHERE unit_id IN (SELECT id FROM units WHERE cnes_code IS NOT NULL AND (city IS NULL OR city NOT ILIKE '%Olinda%') AND local_override = false)");
      await pool.query("DELETE FROM units WHERE cnes_code IS NOT NULL AND (city IS NULL OR city NOT ILIKE '%Olinda%') AND local_override = false");
 
-     await pool.query("DELETE FROM appointments WHERE unit_id IN (SELECT id FROM units WHERE (esfera_administrativa = 'PRIVADA' OR natureza_juridica LIKE '2%') AND local_override = false)");
-     await pool.query("DELETE FROM user_units WHERE unit_id IN (SELECT id FROM units WHERE (esfera_administrativa = 'PRIVADA' OR natureza_juridica LIKE '2%') AND local_override = false)");
-     await pool.query("DELETE FROM users WHERE unit_id IN (SELECT id FROM units WHERE (esfera_administrativa = 'PRIVADA' OR natureza_juridica LIKE '2%') AND local_override = false)");
+     await pool.query("DELETE FROM appointments WHERE unit_id IN (SELECT id FROM units WHERE (esfera_administrativa = 'PRIVADA' OR natureza_juridica LIKE '2%' OR natureza_juridica LIKE '4%') AND local_override = false)");
+     await pool.query("DELETE FROM user_units WHERE unit_id IN (SELECT id FROM units WHERE (esfera_administrativa = 'PRIVADA' OR natureza_juridica LIKE '2%' OR natureza_juridica LIKE '4%') AND local_override = false)");
+     await pool.query("DELETE FROM users WHERE unit_id IN (SELECT id FROM units WHERE (esfera_administrativa = 'PRIVADA' OR natureza_juridica LIKE '2%' OR natureza_juridica LIKE '4%') AND local_override = false)");
      await pool.query("DELETE FROM units WHERE esfera_administrativa = 'PRIVADA' AND local_override = false");
-     await pool.query("DELETE FROM units WHERE natureza_juridica LIKE '2%' AND local_override = false");
+     await pool.query("DELETE FROM units WHERE (natureza_juridica LIKE '2%' OR natureza_juridica LIKE '4%') AND local_override = false");
+     await pool.query("DELETE FROM units WHERE tipo_unidade ILIKE '%CONSULTORIO ISOLADO%' AND local_override = false");
      setSyncProgress({ progress: 15, message: 'Limpando dados inconsistentes...' });
 
       const ibgeCode = '260960'; // Olinda (6 digits - IMPORTANTE: a API só aceita 6 dígitos)
@@ -2550,9 +2551,13 @@ const syncCnes = async () => {
             const esfera = (est.descricao_esfera_administrativa || '').toUpperCase();
             const natureza = String(est.descricao_natureza_juridica_estabelecimento || '');
             
-            // O CNES às vezes cadastra empresas privadas (natureza jurídica 2xxx) com esfera MUNICIPAL
-            // Devemos bloquear qualquer entidade empresarial (código de natureza começando com 2)
-            if (natureza.startsWith('2')) return false;
+            // O CNES às vezes cadastra empresas privadas (2xxx) ou pessoas físicas (4xxx)
+            // Devemos bloquear qualquer entidade empresarial ou pessoa física
+            if (natureza.startsWith('2') || natureza.startsWith('4')) return false;
+            
+            // Bloquear consultórios particulares classificados como CONSULTORIO ISOLADO
+            const tipo = String(est.descricao_tipo_unidade || '').toUpperCase();
+            if (tipo.includes('CONSULTORIO ISOLADO')) return false;
 
             return esfera === 'MUNICIPAL' || esfera === 'ESTADUAL' || esfera === 'FEDERAL';
         });
