@@ -203,7 +203,8 @@ const mapUnit = row => ({
   services: row.services ?? undefined,
   isHospital: row.is_hospital ?? false,
   toleranceMinutes: row.tolerance_minutes !== null ? row.tolerance_minutes : 15,
-  autoCancelNoShow: row.auto_cancel_no_show !== null ? row.auto_cancel_no_show : true
+  autoCancelNoShow: row.auto_cancel_no_show !== null ? row.auto_cancel_no_show : true,
+  active: row.active !== null ? row.active : true
 });
 
 const mapUser = row => ({
@@ -854,6 +855,7 @@ const ensureSchemaAndSeed = async () => {
     'ALTER TABLE units ADD COLUMN IF NOT EXISTS atende_sus boolean DEFAULT true;',
     'ALTER TABLE units ADD COLUMN IF NOT EXISTS tolerance_minutes integer DEFAULT 15;',
     'ALTER TABLE units ADD COLUMN IF NOT EXISTS auto_cancel_no_show boolean DEFAULT false;',
+    'ALTER TABLE units ADD COLUMN IF NOT EXISTS active boolean DEFAULT true;',
     'ALTER TABLE units ADD COLUMN IF NOT EXISTS fluxo_atendimento text;',
     'ALTER TABLE units ADD COLUMN IF NOT EXISTS situacao text;',
     'ALTER TABLE units ADD COLUMN IF NOT EXISTS ultima_atualizacao text;',
@@ -1150,9 +1152,18 @@ app.post('/api/auth/register-patient', async (req, res, next) => {
   }
 });
 
-app.get('/api/units', async (_req, res, next) => {
+app.get('/api/units', async (req, res, next) => {
   try {
-    const { rows } = await pool.query("SELECT * FROM units WHERE esfera_administrativa != 'Privada' OR esfera_administrativa IS NULL ORDER BY name");
+    const includeInactive = req.query.includeInactive === 'true';
+    let query = "SELECT * FROM units WHERE (esfera_administrativa != 'Privada' OR esfera_administrativa IS NULL)";
+    
+    if (!includeInactive) {
+      query += " AND active = true";
+    }
+    
+    query += " ORDER BY name";
+    
+    const { rows } = await pool.query(query);
     res.json(rows.map(mapUnit));
   } catch (error) {
     next(error);
@@ -1222,12 +1233,13 @@ app.patch('/api/units/:id', authenticate, authorize('ADMIN', 'GENERAL_SUPERVISOR
     
     const toleranceMinutes = req.body.toleranceMinutes !== undefined ? req.body.toleranceMinutes : (current.rows[0].tolerance_minutes ?? 15);
     const autoCancelNoShow = req.body.autoCancelNoShow !== undefined ? req.body.autoCancelNoShow : (current.rows[0].auto_cancel_no_show ?? true);
+    const active = req.body.active !== undefined ? req.body.active : (current.rows[0].active ?? true);
     const row = current.rows[0];
     const localOverride = row.cnes_code ? true : row.local_override;
 
     const { rows } = await pool.query(
-      'UPDATE units SET name = $1, address = $2, phone = $3, cep = $4, address_number = $5, neighborhood = $6, city = $7, state = $8, attendance_type = $9, local_override = $10, is_hospital = $11, tolerance_minutes = $13, auto_cancel_no_show = $14 WHERE id = $12 RETURNING *',
-      [name, address, phone, cep, addressNumber, neighborhood, city, state, attendanceType, localOverride, isHospital, req.params.id, toleranceMinutes, autoCancelNoShow]
+      'UPDATE units SET name = $1, address = $2, phone = $3, cep = $4, address_number = $5, neighborhood = $6, city = $7, state = $8, attendance_type = $9, local_override = $10, is_hospital = $11, tolerance_minutes = $13, auto_cancel_no_show = $14, active = $15 WHERE id = $12 RETURNING *',
+      [name, address, phone, cep, addressNumber, neighborhood, city, state, attendanceType, localOverride, isHospital, req.params.id, toleranceMinutes, autoCancelNoShow, active]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Unidade nao encontrada.' });
     await audit(req, 'UPDATE', 'unit', req.params.id);
