@@ -853,6 +853,7 @@ const ensureSchemaAndSeed = async () => {
     'ALTER TABLE units ADD COLUMN IF NOT EXISTS natureza_juridica text;',
     'ALTER TABLE units ADD COLUMN IF NOT EXISTS atende_sus boolean DEFAULT true;',
     'ALTER TABLE units ADD COLUMN IF NOT EXISTS tolerance_minutes integer DEFAULT 15;',
+    'ALTER TABLE units ADD COLUMN IF NOT EXISTS auto_cancel_no_show boolean DEFAULT false;',
     'ALTER TABLE units ADD COLUMN IF NOT EXISTS fluxo_atendimento text;',
     'ALTER TABLE units ADD COLUMN IF NOT EXISTS situacao text;',
     'ALTER TABLE units ADD COLUMN IF NOT EXISTS ultima_atualizacao text;',
