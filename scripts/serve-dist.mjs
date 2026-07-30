@@ -2515,7 +2515,18 @@ const syncCnes = async () => {
      await pool.query("DELETE FROM users WHERE unit_id IN (SELECT id FROM units WHERE (esfera_administrativa = 'PRIVADA' OR natureza_juridica LIKE '2%' OR natureza_juridica LIKE '4%') AND local_override = false)");
      await pool.query("DELETE FROM units WHERE esfera_administrativa = 'PRIVADA' AND local_override = false");
      await pool.query("DELETE FROM units WHERE (natureza_juridica LIKE '2%' OR natureza_juridica LIKE '4%') AND local_override = false");
-     await pool.query("DELETE FROM units WHERE tipo_unidade ILIKE '%CONSULTORIO ISOLADO%' AND local_override = false");
+     
+     // Limpeza estrita de tipos de unidades para remover Farmácias, Academias, Diretorias, Clínicas, etc que já estavam no banco
+     const deletableTypes = [
+       '%FARMACIA%', '%ACADEMIA%', '%VIGILANCIA%', '%BOMBEIROS%', '%LABORATORIO%', 
+       '%CLINICA%', '%DIRETORIA%', '%REABILITACAO%', '%CONSULTORIO%', '%ATENCAO PRIMARIA%'
+     ];
+     for (const type of deletableTypes) {
+         await pool.query("DELETE FROM appointments WHERE unit_id IN (SELECT id FROM units WHERE tipo_unidade ILIKE $1 AND local_override = false)", [type]);
+         await pool.query("DELETE FROM user_units WHERE unit_id IN (SELECT id FROM units WHERE tipo_unidade ILIKE $1 AND local_override = false)", [type]);
+         await pool.query("DELETE FROM users WHERE unit_id IN (SELECT id FROM units WHERE tipo_unidade ILIKE $1 AND local_override = false)", [type]);
+         await pool.query("DELETE FROM units WHERE tipo_unidade ILIKE $1 AND local_override = false", [type]);
+     }
      
      // Também vamos limpar previamente tudo que não é UBS, USF, UPA, CAPS ou Hospitais baseados nos seus nomes habituais, ou pelo fato de sumirem da próxima sincronização.
      // Se houverem especialidades atreladas a elas, não há problema pois sumirão pelo ON DELETE CASCADE ou RESTRICT resolvidos aqui.
