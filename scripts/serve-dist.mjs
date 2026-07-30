@@ -840,6 +840,8 @@ const ensureSchemaAndSeed = async () => {
     'ALTER TABLE appointments ADD COLUMN IF NOT EXISTS called_at timestamptz;',
     'ALTER TABLE appointments ADD COLUMN IF NOT EXISTS call_location varchar(50);',
     'ALTER TABLE exams ADD COLUMN IF NOT EXISTS notes text;',
+    'ALTER TABLE exam_types ADD COLUMN IF NOT EXISTS preparation text;',
+    'ALTER TABLE exam_types ADD COLUMN IF NOT EXISTS requires_referral boolean DEFAULT true;',
     'ALTER TABLE exams ADD COLUMN IF NOT EXISTS referral_attachment text;',
     'ALTER TABLE exams ADD COLUMN IF NOT EXISTS cancel_reason text;',
     'ALTER TABLE exams DROP CONSTRAINT IF EXISTS exams_status_check;',
