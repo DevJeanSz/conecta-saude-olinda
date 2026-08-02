@@ -19,6 +19,8 @@ import rateLimit from 'express-rate-limit';
 import xss from 'xss';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+import { createHealthPostImageStorage, requireHealthPostImageUrl } from '../server/domain/healthPostImages.mjs';
 import { hasAppointmentConflict, nextQueuePassword } from '../server/domain/schedulingRules.mjs';
 
 const { Pool } = pg;
@@ -72,6 +74,7 @@ io.on('connection', (socket) => {
 const port = Number.parseInt(process.env.PORT || '4173', 10);
 const databaseUrl = process.env.DATABASE_URL;
 const jwtSecret = process.env.JWT_SECRET;
+const { storeHealthPostImage } = createHealthPostImageStorage({ createSupabaseClient });
 
 if (!Number.isInteger(port) || port < 1 || port > 65535) {
   console.error('PORT precisa ser um numero entre 1 e 65535.');
@@ -284,20 +287,6 @@ const mapHealthPost = row => ({
   updatedAt: row.updated_at
 });
 
-const requireImageUrl = (value) => {
-  const imageUrl = String(value ?? '').trim();
-  const isBundledAsset = imageUrl.startsWith('/news/');
-  const isUploadedImage = /^data:image\/(png|jpe?g|webp);base64,[a-z0-9+/=]+$/i.test(imageUrl);
-
-  if (!imageUrl || imageUrl.length > 2500000 || (!isBundledAsset && !isUploadedImage)) {
-    const error = new Error('imagem invalida.');
-    error.status = 400;
-    throw error;
-  }
-
-  return imageUrl;
-};
-
 const normalizeHealthPostPayload = (body, current = {}) => {
   const title = requireText(body.title ?? current.title, 'titulo', 96);
   const context = requireText(body.context ?? current.context, 'contexto', 48);
@@ -317,7 +306,7 @@ const normalizeHealthPostPayload = (body, current = {}) => {
     context,
     body: text,
     icon,
-    imageUrl: requireImageUrl(body.imageUrl ?? body.image_url ?? current.image_url),
+    imageUrl: requireHealthPostImageUrl(body.imageUrl ?? body.image_url ?? current.image_url),
     published: body.published !== undefined ? Boolean(body.published) : (current.published ?? true),
     displayOrder,
   };
@@ -1548,6 +1537,7 @@ app.get('/api/admin/health-posts', authenticate, authorize('ADMIN', 'GENERAL_SUP
 app.post('/api/admin/health-posts', authenticate, authorize('ADMIN', 'GENERAL_SUPERVISOR'), async (req, res, next) => {
   try {
     const payload = normalizeHealthPostPayload(req.body);
+    payload.imageUrl = await storeHealthPostImage(payload.imageUrl);
     const { rows } = await pool.query(
       `INSERT INTO health_posts (title, context, body, icon, image_url, published, display_order, created_by, updated_by)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
@@ -1567,6 +1557,7 @@ app.patch('/api/admin/health-posts/:id', authenticate, authorize('ADMIN', 'GENER
     if (!current.rows[0]) return res.status(404).json({ error: 'Publicacao nao encontrada.' });
 
     const payload = normalizeHealthPostPayload(req.body, current.rows[0]);
+    payload.imageUrl = await storeHealthPostImage(payload.imageUrl, current.rows[0].image_url);
     const { rows } = await pool.query(
       `UPDATE health_posts
        SET title = $1, context = $2, body = $3, icon = $4, image_url = $5, published = $6,
