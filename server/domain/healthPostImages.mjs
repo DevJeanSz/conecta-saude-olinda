@@ -97,6 +97,9 @@ export const createHealthPostImageStorage = ({
           persistSession: false,
           autoRefreshToken: false,
         },
+        realtime: {
+          transport: ws,
+        },
         global: {
           WebSocket: ws,
         },
