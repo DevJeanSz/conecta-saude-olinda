@@ -53,6 +53,7 @@
     "sweetalert2": "^11.10.6",
     "sweetalert2-react-content": "^5.0.7",
     "unzipper": "^0.12.5",
+    "ws": "^8.21.1",
     "xss": "^1.0.15"
   },
   "devDependencies": {

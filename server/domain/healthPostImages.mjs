@@ -1,4 +1,5 @@
 import { randomUUID as defaultRandomUUID } from 'node:crypto';
+import ws from 'ws';
 
 export const DEFAULT_PUBLICATIONS_SUPABASE_BUCKET = 'pubconectaolinda';
 export const HEALTH_POST_DATA_URL_PATTERN = /^data:image\/(png|jpe?g|webp);base64,([a-z0-9+/=]+)$/i;
@@ -95,6 +96,9 @@ export const createHealthPostImageStorage = ({
         auth: {
           persistSession: false,
           autoRefreshToken: false,
+        },
+        global: {
+          WebSocket: ws,
         },
       });
     }
